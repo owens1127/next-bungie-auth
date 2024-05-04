@@ -1,0 +1,38 @@
+{
+  "name": "next-bungie-auth",
+  "version": "1.0.0",
+  "keywords": [
+    "auth",
+    "bungie",
+    "oauth",
+    "oauth2",
+    "next",
+    "nextjs"
+  ],
+  "homepage": "https://github.com/owens1127/next-bungie-auth",
+  "repository": "owens1127/next-bungie-auth",
+  "license": "MIT",
+  "files": [
+    "./**/*.js",
+    "./**/*.jsx",
+    "./**/*.d.ts"
+  ],
+  "exports": {
+    "./types": {
+      "types": "./types.d.ts",
+      "default": "./types.js"
+    },
+    "./server": {
+      "types": "./server.d.ts",
+      "default": "./server.js"
+    },
+    "./client": {
+      "types": "./client.d.ts",
+      "default": "./client.js"
+    }
+  },
+  "dependencies": {
+    "next": ">=13.5.1",
+    "react": ">=18.2.0"
+  }
+}

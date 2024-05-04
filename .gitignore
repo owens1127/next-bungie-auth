@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# Node.js
+node_modules
+
+# Finder (MacOS) folder config
+.DS_Store
+
+# Next.js
+.next
+certificates
+
+# Build
+dist/*
+!dist/LICENSE.md
+!dist/package.json
