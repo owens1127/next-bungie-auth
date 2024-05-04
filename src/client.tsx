@@ -255,7 +255,8 @@ function calculateMsToNextRefresh(session: BungieSessionState) {
     case "authorized":
       return Math.max(
         1,
-        new Date(session.data.accessTokenExpires).getTime() - Date.now()
+        new Date(session.data.accessTokenExpiresAt * 1000).getTime() -
+          Date.now()
       );
     case "pending":
     case "unauthorized":

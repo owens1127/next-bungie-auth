@@ -4,25 +4,25 @@ import {
   clearAuthStateCookie,
   clearSessionCookie,
   getAuthStateCookie,
+  getSessionCookie,
   setAuthStateCookie,
   setSessionCookie,
 } from "./cookies";
 import { BungieAuthorizationError } from "./error";
 import { getSession } from "./session";
-import { getTokens } from "./tokens";
+import { decodeToken, encodeToken, getTokens } from "./tokens";
 import type {
   BungieTokenResponse,
   NextBungieAuth,
   NextBungieAuthConfig,
   NextBungieAuthConfigRequiredKeys,
 } from "./types";
-import { cookies } from "next/headers";
 
 export const DefaultBungieAuthConfig: Omit<
   NextBungieAuthConfig,
   NextBungieAuthConfigRequiredKeys
 > = {
-  minimumRefreshInterval: 30 * 60,
+  sessionRefreshGracePeriod: 300,
   baseCookieName: "__next-bungie-auth",
   cookieOptions: {
     httpOnly: true,
@@ -49,8 +49,6 @@ export const DefaultBungieAuthConfig: Omit<
         return res.json() as Promise<BungieTokenResponse>;
       }
     }),
-  encode: async (data) => btoa(JSON.stringify(data)),
-  decode: async (token) => JSON.parse(atob(token)),
   logResponse: (path, statusCode, state) =>
     console.log(`BungieNextAuth[${path}]`, state, statusCode),
   logError: (path, err, state) =>
@@ -89,36 +87,28 @@ export const createNextBungieAuth = (
         );
       },
       updateServerSession: async (tokens: BungieTokenResponse, iat: Date) => {
-        const jwt = await defaultedConfig.encode({
-          bungie: tokens,
-          iat: Math.floor(iat.getTime() / 1000),
-          exp: Math.floor(iat.getTime() / 1000) + tokens.expires_in,
-        });
+        const jwt = encodeToken(tokens, iat, defaultedConfig);
         setSessionCookie(
           jwt,
           new Date(iat.getTime() + tokens.refresh_expires_in * 1000),
           defaultedConfig
         );
       },
-      getServerSession: async () => {
-        const encodedToken = cookies().get(
-          `${defaultedConfig.baseCookieName}.session`
-        )?.value;
-        const token = encodedToken
-          ? await defaultedConfig.decode(encodedToken)
-          : null;
+      getServerSession: () => {
+        const encodedToken = getSessionCookie(defaultedConfig);
+        const tokens = decodeToken(encodedToken, defaultedConfig);
 
-        if (!token) {
+        if (!tokens) {
           const session = getSession({
             createdAt: null,
-            jwt: null,
+            tokens: null,
             state: "unauthorized",
           });
           return session;
         } else {
           const session = getSession({
-            jwt: token.bungie,
-            createdAt: new Date(token.iat * 1000),
+            tokens: tokens,
+            createdAt: new Date(tokens.iat * 1000),
             state: "authorized",
           });
           return session;
@@ -182,8 +172,16 @@ export const createNextBungieAuth = (
             defaultedConfig
           );
         } catch (e: any) {
-          defaultedConfig.logError("callback", e, "unknown error");
           defaultedConfig.logResponse("callback", 500, "error");
+          if (e instanceof BungieAuthorizationError) {
+            defaultedConfig.logError(
+              "callback",
+              e,
+              `${e.error}: ${e.error_description}`
+            );
+          } else {
+            defaultedConfig.logError("callback", e, "unknown error");
+          }
           return NextResponse.json(
             {
               error: e.message,
@@ -193,11 +191,7 @@ export const createNextBungieAuth = (
         }
 
         const now = new Date();
-        const encodedToken = await defaultedConfig.encode({
-          bungie: data,
-          iat: Math.floor(now.getTime() / 1000),
-          exp: Math.floor(now.getTime() / 1000) + data.expires_in,
-        });
+        const encodedToken = encodeToken(data, now, defaultedConfig);
         setSessionCookie(
           encodedToken,
           new Date(now.getTime() + data.refresh_expires_in * 1000),
@@ -217,30 +211,25 @@ export const createNextBungieAuth = (
         ) {
           force = true;
         }
-        const encodedToken = cookies().get(
-          `${defaultedConfig.baseCookieName}.session`
-        )?.value;
+        const encodedToken = getSessionCookie(defaultedConfig);
+        const tokens = decodeToken(encodedToken, defaultedConfig);
 
-        const token = encodedToken
-          ? await defaultedConfig.decode(encodedToken)
-          : null;
-
-        if (!token) {
+        if (!tokens) {
           const session = getSession({
             createdAt: null,
-            jwt: null,
+            tokens: null,
             state: "unauthorized",
           });
           defaultedConfig.logResponse("session", 401, "no session");
           return NextResponse.json(session, { status: 200 });
         } else if (
           !force &&
-          token.iat + token.bungie.expires_in - Date.now() / 1000 >
-            defaultedConfig.minimumRefreshInterval
+          tokens.iat + tokens.expires_in - Date.now() / 1000 >
+            defaultedConfig.sessionRefreshGracePeriod
         ) {
           const session = getSession({
-            jwt: token.bungie,
-            createdAt: new Date(token.iat * 1000),
+            tokens: tokens,
+            createdAt: new Date(tokens.iat * 1000),
             state: "authorized",
           });
           defaultedConfig.logResponse("session", 200, "not modified");
@@ -254,7 +243,7 @@ export const createNextBungieAuth = (
           data = await getTokens(
             {
               grantType: "refresh_token",
-              value: token.bungie.refresh_token,
+              value: tokens.refresh_token,
             },
             defaultedConfig
           );
@@ -267,7 +256,7 @@ export const createNextBungieAuth = (
             );
             const session = getSession({
               createdAt: null,
-              jwt: null,
+              tokens: null,
               state: "error",
             });
             defaultedConfig.logResponse("session", 500, "unknown error");
@@ -276,8 +265,8 @@ export const createNextBungieAuth = (
 
           if (e.error_description === "SystemDisabled") {
             const session = getSession({
-              jwt: token.bungie,
-              createdAt: new Date(token.iat * 1000),
+              tokens: tokens,
+              createdAt: new Date(tokens.iat * 1000),
               state: "system disabled",
             });
             defaultedConfig.logResponse("session", 503, "system disabled");
@@ -286,7 +275,7 @@ export const createNextBungieAuth = (
             clearSessionCookie(defaultedConfig);
             const session = getSession({
               createdAt: null,
-              jwt: null,
+              tokens: null,
               state: "reauthorization required",
             });
             defaultedConfig.logResponse("session", 401, e.error_description);
@@ -294,11 +283,7 @@ export const createNextBungieAuth = (
           }
         }
 
-        const jwt = await defaultedConfig.encode({
-          bungie: data,
-          iat: Math.floor(now.getTime() / 1000),
-          exp: Math.floor(now.getTime() / 1000 + data.expires_in),
-        });
+        const jwt = encodeToken(data, now, defaultedConfig);
         setSessionCookie(
           jwt,
           new Date(now.getTime() + data.refresh_expires_in * 1000),
@@ -306,7 +291,7 @@ export const createNextBungieAuth = (
         );
 
         const session = getSession({
-          jwt: data,
+          tokens: data,
           createdAt: now,
           state: "refreshed",
         });

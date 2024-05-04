@@ -1,4 +1,8 @@
-import type { NextBungieAuthConfig } from "./types";
+import type {
+  BungieTokenResponse,
+  NextBungieAuthConfig,
+  NextBungieAuthJWTPayload,
+} from "./types";
 
 /** @internal */
 export const getTokens = async (
@@ -21,4 +25,50 @@ export const getTokens = async (
   );
 
   return data;
+};
+
+/** @internal */
+export const encodeToken = (
+  data: BungieTokenResponse,
+  iat: Date,
+  config: NextBungieAuthConfig
+) => {
+  const jsonStr = JSON.stringify({
+    ...data,
+    iat: Math.floor(iat.getTime() / 1000),
+  } as NextBungieAuthJWTPayload);
+
+  return btoa(
+    jsonStr
+      .split("")
+      .map((c, i) =>
+        String.fromCharCode(
+          c.charCodeAt(0) +
+            config.clientSecret.charCodeAt(i % config.clientSecret.length)
+        )
+      )
+      .join("")
+  );
+};
+
+/** @internal */
+export const decodeToken = (
+  encodedStr: string | undefined,
+  config: NextBungieAuthConfig
+) => {
+  if (!encodedStr) {
+    return null;
+  }
+
+  const decodedStr = atob(encodedStr)
+    .split("")
+    .map((c, i) =>
+      String.fromCharCode(
+        c.charCodeAt(0) -
+          config.clientSecret.charCodeAt(i % config.clientSecret.length)
+      )
+    )
+    .join("");
+
+  return JSON.parse(decodedStr) as NextBungieAuthJWTPayload;
 };

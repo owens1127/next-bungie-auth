@@ -13,7 +13,7 @@ These instructions will get you a copy of the project up and running on your loc
 - Registered [Bungie developer application](https://www.bungie.net/en/Application)
   1.  Select **Confidential** OAuth Client Type
   2.  Set your redirect url to `https://localhost:3000/your-custom-path`
-      - Note: you should create a seperate application for production
+      - Note: you should create a separate application for production
 
 ### Installation
 
@@ -128,8 +128,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Optional: to avoid round trips, grab the session from the cookies at the time of the request
-  const serverSession = await getServerSession();
+  // Optional: to avoid extra round trips, grab the session from the cookies at the time of the request
+  const serverSession = getServerSession();
 
   return (
     <html lang="en">
@@ -158,40 +158,50 @@ Now, you can create a component which accesses the session
 
 import { useBungieSession } from "next-bungie-auth/client";
 
-const session = useBungieSession();
+export const MyComponent = () => {
+  const session = useBungieSession();
 
-if (session.isPending) return <div>Loading...</div>;
+  if (session.isPending) return <div>Loading...</div>;
 
-return (
-  <div>
-    {session.status === "authorized" ? (
-      <div>
-        <button onClick={() => session.end()}>Sign Out</button>
-        <button onClick={() => session.end(true)}>Sign Out (Reload)</button>
-      </div>
-    ) : (
-      <div>
-        <button>
-          <a href="/api/auth/login">Sign In</a>
-        </button>
-
-        <button>
-          <a href="/api/auth/login?reauth=true">Sign (Force Re-Auth)</a>
-        </button>
-      </div>
-    )}
-
+  return (
     <div>
-      <h2>Session</h2>
+      {session.status === "authorized" ? (
+        <div>
+          <button onClick={() => session.end()}>Sign Out</button>
+          <button onClick={() => session.end(true)}>Sign Out (Reload)</button>
+        </div>
+      ) : (
+        <div>
+          <button>
+            <a href="/api/auth/login">Sign In</a>
+          </button>
+
+          <button>
+            <a href="/api/auth/login?reauth=true">Sign (Force Re-Auth)</a>
+          </button>
+        </div>
+      )}
+
+      <div>
+        <h2>Session</h2>
+      </div>
+      <pre>{JSON.stringify(session, null, 2)}</pre>
+      <div>
+        <button onClick={() => session.refresh()}>Refresh</button>
+        <button onClick={() => session.refresh(true)}>Refresh (soft)</button>
+      </div>
     </div>
-    <pre>{JSON.stringify(session, null, 2)}</pre>
-    <div>
-      <button onClick={() => session.refresh()}>Refresh</button>
-      <button onClick={() => session.refresh(true)}>Refresh (soft)</button>
-    </div>
-  </div>
-);
+  );
+};
 ```
+
+## Important Note
+
+In order to use Bungie's OAuth, you must use HTTPS. Next.js provides built in support with version 13.5 and above, using the `--experimental-https` flag. Update your dev command to use `next dev --experimental-https` if you do not have any custom proxy solution.
+
+## What does this library not do?
+
+This library does not handle network or refetching client side on an error. The session state provides the tools needed to identify a network or client error and refetch, but the user will need to manually implement this retry logic
 
 ## Questions?
 
@@ -200,7 +210,3 @@ Reach out to `_newo` on Discord!
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
-
-```
-
-```

@@ -52,7 +52,7 @@ export type NextBungieAuth = {
     /**
      * Retrieves the current server session. Does not refresh the session.
      */
-    getServerSession: () => Promise<NextBungieAuthSessionResponse>;
+    getServerSession: () => NextBungieAuthSessionResponse;
   };
 };
 
@@ -74,10 +74,15 @@ export type NextBungieAuthConfig = {
    */
   clientSecret: string;
   /**
-   * The minimum time to wait in seconds before refreshing the valid auth token.
-   * Defaults to 1800 seconds (30 minutes).
+   * The time in seconds before the access token expires when calls to the session
+   * endpoint will refresh the session.
+   *
+   * Calls to the session endpoint without `force=true` will not refresh the session if
+   * the access token expires in greater than this time.
+   *
+   * Defaults to 300 seconds (5 minutes).
    */
-  minimumRefreshInterval: number;
+  sessionRefreshGracePeriod: number;
   /**
    * The name of the base cookie. Defaults to `__next-bungie-auth`.
    */
@@ -91,16 +96,6 @@ export type NextBungieAuthConfig = {
       }```
    */
   cookieOptions: Partial<Omit<ResponseCookie, "expires">>;
-  /**
-   * Method to encode the session into a string.
-   * Defaults to base64 encoding.
-   */
-  encode: (data: NextBungieAuthJWTPayload) => Promise<string>;
-  /**
-   * Method to decode the session from a string.
-   * Defaults to base64 decoding.
-   */
-  decode: (token: string) => Promise<NextBungieAuthJWTPayload>;
   /**
    * Function to generate a state for the OAuth request.
    * @param request - The NextRequest object.
@@ -152,23 +147,27 @@ export type BungieTokenResponse = {
 };
 
 export type NextBungieAuthJWTPayload = {
-  bungie: BungieTokenResponse;
+  access_token: string;
+  token_type: "Bearer";
+  expires_in: number;
+  refresh_token: string;
+  refresh_expires_in: number;
+  membership_id: string;
   iat: number;
-  exp: number;
 };
 
 /**
  * The data returned from the session API route.
  *
- * Dates are in ISO 8601 format and can be parsed with `new Date(dateString)`.
+ * Dates are in seconds since epoch`.
  */
 export type NextBungieAuthSessionData = {
   bungieMembershipId: string;
   accessToken: string;
-  accessTokenExpires: string;
+  accessTokenExpiresAt: number;
   refreshToken: string;
-  refreshTokenExpires: string;
-  minted: string;
+  refreshTokenExpiresAt: number;
+  createdAt: number;
 };
 
 export type NextBungieAuthSessionResponse =
@@ -217,7 +216,7 @@ export type BungieSession = BungieSessionState & {
    */
   end: (reload?: boolean) => void;
   /**
-   * Refreshes the session. If `soft` is true, the session will only refresh expired or if config allows.
+   * Refreshes the session. If `soft` is true, the session will only refresh when expired or if config allows.
    */
   refresh: (soft?: boolean) => void;
 };

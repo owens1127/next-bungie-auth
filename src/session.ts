@@ -6,17 +6,17 @@ import type {
 /** @internal */
 export const getSession = ({
   createdAt,
-  jwt,
+  tokens,
   state,
 }:
   | {
       createdAt: Date;
-      jwt: BungieTokenResponse;
+      tokens: BungieTokenResponse;
       state: "authorized" | "refreshed" | "system disabled";
     }
   | {
       createdAt: null;
-      jwt: null;
+      tokens: null;
       state: "reauthorization required" | "unauthorized" | "error";
     }): NextBungieAuthSessionResponse => {
   switch (state) {
@@ -32,20 +32,17 @@ export const getSession = ({
         data: null,
       };
     default:
+      const createdAtSeconds = Math.floor(createdAt.getTime() / 1000);
       return {
         status:
           state === "system disabled" ? "bungie-api-offline" : "authorized",
         data: {
-          bungieMembershipId: jwt.membership_id,
-          accessToken: jwt.access_token,
-          accessTokenExpires: new Date(
-            jwt.expires_in * 1000 + createdAt.getTime()
-          ).toISOString(),
-          refreshToken: jwt.refresh_token,
-          refreshTokenExpires: new Date(
-            jwt.refresh_expires_in * 1000 + createdAt.getTime()
-          ).toISOString(),
-          minted: createdAt.toISOString(),
+          bungieMembershipId: tokens.membership_id,
+          accessToken: tokens.access_token,
+          accessTokenExpiresAt: tokens.expires_in + createdAtSeconds,
+          refreshToken: tokens.refresh_token,
+          refreshTokenExpiresAt: tokens.refresh_expires_in + createdAtSeconds,
+          createdAt: createdAtSeconds,
         },
       };
   }

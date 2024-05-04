@@ -2,7 +2,7 @@
   "private": true,
   "scripts": {
     "clean": "tsc --build tsconfig.json --clean",
-    "build": "tsc --build tsconfig.json"
+    "compile": "tsc --build tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "^20.12.8",
