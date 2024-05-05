@@ -104,11 +104,12 @@ export type NextBungieAuthConfig = {
   generateState: (request: NextRequest) => string;
   /**
    * Callback function to determine the callback URL for the OAuth request.
-   * Defaults to the origin of the request URL.
+   * Defaults to the origin of the request URL if successful, or the origin with `/error` if not.
    * @param request - The NextRequest object.
+   * @param success - If the callback is successful.
    * @returns The NextResponse object or void.
    */
-  getCallbackURL: (request: NextRequest) => string;
+  getCallbackURL: (request: NextRequest, success: boolean) => string;
   /**
    * Function to make HTTP request given the search parameters.
    * Defaults to a fetch request using the native fetch API to the Bungie API.
@@ -146,13 +147,7 @@ export type BungieTokenResponse = {
   membership_id: string;
 };
 
-export type NextBungieAuthJWTPayload = {
-  access_token: string;
-  token_type: "Bearer";
-  expires_in: number;
-  refresh_token: string;
-  refresh_expires_in: number;
-  membership_id: string;
+export type NextBungieAuthJWTPayload = BungieTokenResponse & {
   iat: number;
 };
 
@@ -212,11 +207,12 @@ export type BungieSessionProviderOptions = {
  */
 export type BungieSession = BungieSessionState & {
   /**
-   * Ends the session and optionally reloads the page.
+   * Logs the user out by removing the session cookie and optionally reloads the page.
    */
   end: (reload?: boolean) => void;
   /**
-   * Refreshes the session. If `soft` is true, the session will only refresh when expired or if config allows.
+   * Refreshes the session. If `soft` is true, the session will only refresh from bungie.net
+   * when expired or inside the grace period.
    */
   refresh: (soft?: boolean) => void;
 };

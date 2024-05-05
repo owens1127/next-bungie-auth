@@ -29,7 +29,13 @@ export const DefaultBungieAuthConfig: Omit<
     secure: true,
     sameSite: "lax",
   },
-  getCallbackURL: (request) => new URL(request.url).origin,
+  getCallbackURL: (request, success) => {
+    if (success) {
+      return new URL("/", request.url).toString();
+    } else {
+      return new URL("/error", request.url).toString();
+    }
+  },
   tokenHttp: (searchParams) =>
     fetch("https://www.bungie.net/platform/app/oauth/token/", {
       method: "POST",
@@ -64,10 +70,10 @@ export const createNextBungieAuth = (
   config: Partial<NextBungieAuthConfig> &
     Pick<NextBungieAuthConfig, NextBungieAuthConfigRequiredKeys>
 ): NextBungieAuth => {
-  const defaultedConfig = {
+  const defaultedConfig: NextBungieAuthConfig = {
     ...DefaultBungieAuthConfig,
     ...config,
-  } as NextBungieAuthConfig;
+  };
 
   return {
     serverSideHelpers: {
@@ -98,25 +104,21 @@ export const createNextBungieAuth = (
         const encodedToken = getSessionCookie(defaultedConfig);
         const tokens = decodeToken(encodedToken, defaultedConfig);
 
-        if (!tokens) {
-          const session = getSession({
-            createdAt: null,
-            tokens: null,
-            state: "unauthorized",
-          });
-          return session;
-        } else {
-          const session = getSession({
-            tokens: tokens,
-            createdAt: new Date(tokens.iat * 1000),
-            state: "authorized",
-          });
-          return session;
-        }
+        return tokens
+          ? getSession({
+              tokens: tokens,
+              createdAt: new Date(tokens.iat * 1000),
+              state: "authorized",
+            })
+          : getSession({
+              createdAt: null,
+              tokens: null,
+              state: "unauthorized",
+            });
       },
     },
     handlers: {
-      authorizeGET: async (request) => {
+      authorizeGET: (request) => {
         const state = defaultedConfig.generateState(request);
 
         const url = new URL("https://www.bungie.net/en/oauth/authorize");
@@ -133,7 +135,7 @@ export const createNextBungieAuth = (
         redirect(url.toString());
       },
 
-      deauthorizePOST: async () => {
+      deauthorizePOST: () => {
         clearSessionCookie(defaultedConfig);
         defaultedConfig.logResponse("deauthorize", 200);
         return NextResponse.json("ok", {
@@ -153,13 +155,8 @@ export const createNextBungieAuth = (
             `State mismatch error. Expected ${urlState}, got ${cookieState}`
           );
           defaultedConfig.logError("callback", err, "state mismatch");
-          defaultedConfig.logResponse("callback", 403, "error");
-          return NextResponse.json(
-            {
-              error: "State mismatch error",
-            },
-            { status: 403 }
-          );
+          defaultedConfig.logResponse("callback", 307, "state mismatch error");
+          redirect(defaultedConfig.getCallbackURL(request, false));
         }
 
         let data: BungieTokenResponse;
@@ -172,7 +169,6 @@ export const createNextBungieAuth = (
             defaultedConfig
           );
         } catch (e: any) {
-          defaultedConfig.logResponse("callback", 500, "error");
           if (e instanceof BungieAuthorizationError) {
             defaultedConfig.logError(
               "callback",
@@ -182,15 +178,12 @@ export const createNextBungieAuth = (
           } else {
             defaultedConfig.logError("callback", e, "unknown error");
           }
-          return NextResponse.json(
-            {
-              error: e.message,
-            },
-            { status: 500 }
-          );
+          defaultedConfig.logResponse("callback", 307, "token fetch error");
+          redirect(defaultedConfig.getCallbackURL(request, false));
         }
 
         const now = new Date();
+        now.setMilliseconds(0);
         const encodedToken = encodeToken(data, now, defaultedConfig);
         setSessionCookie(
           encodedToken,
@@ -199,7 +192,7 @@ export const createNextBungieAuth = (
         );
 
         defaultedConfig.logResponse("callback", 307, "authorized");
-        redirect(defaultedConfig.getCallbackURL(request));
+        redirect(defaultedConfig.getCallbackURL(request, true));
       },
 
       sessionGET: async (request) => {

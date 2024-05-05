@@ -39,7 +39,7 @@ See [NextBungieAuthConfig](`/src/types.ts`) for a list of all options.
 import "server-only"; // this is an optional npm package which prevents your from accidentally importing server code on the client (npm install server-only)
 import { createNextBungieAuth } from "next-bungie-auth/server";
 
-const {
+export const {
   handlers: { authorizeGET, deauthorizePOST, callbackGET, sessionGET },
   serverSideHelpers: {
     getServerSession,
@@ -137,7 +137,7 @@ export default async function RootLayout({
         <main>
           <BungieSessionProvider
             // You can customize these paths, however, they must align with the location of your route handlers
-            sessionPath="/api/auth/session"
+            sessionPath="/api/auth/authorize"
             deauthorizePath="/api/auth/deauthorize"
             initialSession={serverSession}
           >
