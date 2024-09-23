@@ -1,39 +1,49 @@
 "use client";
 
 import { useBungieSession } from "next-bungie-auth/client";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 
 export default function Page() {
   const session = useBungieSession();
 
-  if (session.isPending) return <div>Loading...</div>;
-
   return (
-    <div>
-      {session.status === "authorized" ? (
-        <div>
-          <button onClick={() => session.end()}>Sign Out</button>
-          <button onClick={() => session.end(true)}>Sign Out (Reload)</button>
-        </div>
-      ) : (
-        <div>
-          <button>
-            <a href="/api/auth/login">Sign In</a>
-          </button>
-
-          <button>
-            <a href="/api/auth/login?reauth=true">Sign (Force Re-Auth)</a>
-          </button>
-        </div>
-      )}
-
-      <div>
-        <h2>Session</h2>
-      </div>
-      <pre>{JSON.stringify(session, null, 2)}</pre>
-      <div>
-        <button onClick={() => session.refresh()}>Refresh</button>
-        <button onClick={() => session.refresh(true)}>Refresh (soft)</button>
-      </div>
-    </div>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Session</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <pre className="bg-gray-100 p-4 rounded-md overflow-x-auto">
+          {JSON.stringify(session, null, 2)}
+        </pre>
+      </CardContent>
+      <CardFooter className="flex justify-end space-x-2">
+        {(session.status === "authorized" ||
+          session.status === "unavailable") && (
+          <>
+            <Button onClick={() => session.kill()} variant="destructive">
+              Sign Out
+            </Button>
+            <Button onClick={() => session.refresh()} variant="secondary">
+              Refresh
+            </Button>
+            <Button onClick={() => session.refresh(true)} variant="secondary">
+              Refresh (force)
+            </Button>
+          </>
+        )}
+        {session.status === "unauthorized" && (
+          <Button asChild>
+            <a href="/api/auth/signin">Sign In</a>
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
   );
 }

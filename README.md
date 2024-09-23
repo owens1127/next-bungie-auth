@@ -32,7 +32,7 @@ BUNGIE_CLIENT_SECRET=OAuth_client_secret
 
 On the server side, you can use the `createNextBungieAuth` function from `next-bungie-auth/server` to create Bungie auth handlers and server-side helpers.
 
-See [NextBungieAuthConfig](`/src/types.ts`) for a list of all options.
+See [NextBungieAuthConfig](`/lib/types.ts`) for a list of all options.
 
 ```ts
 // /app/api/auth/index.ts
@@ -104,19 +104,20 @@ export { sessionGET as GET } from "..";
 export const runtime = "edge";
 ```
 
-To use the Bungie authentication in your Next.js pages, you can use the `useBungieSession` hook from [`client.tsx`](src/client.tsx). This hook provides the current Bungie session context.
+To use the Bungie authentication in your Next.js pages, you can use the `useBungieSession` hook from [`client.tsx`](lib/client.tsx). This hook provides the current Bungie session context.
 
 ### Authenticating Client Side
 
 Now that you have set up your server-side logic, it is likely that you will also be making client-side requests on behalf of the user.
 
-You can use the `BungieSessionProvider` from [`client.tsx`](src/client.tsx) to provide a Bungie session context to your components. It is recommended to place this component in the **root layout**. This provider takes several options:
+You can use the `BungieSessionProvider` from [`client.tsx`](lib/client.tsx) to provide a Bungie session context to your components. It is recommended to place this component in the **root layout**. This provider takes several options:
 
 - `sessionPath`: The path to the session.
 - `deauthorizePath`: The path to deauthorize the session.
 - `initialSession`: The initial session data.
 - `enableAutomaticRefresh`: (Default true) Whether to enable automatic session refresh.
-- ...and more
+- `refreshInBackground`: Whether or not automatic refreshes happen when the browser tab is hidden
+- ...and more. See `BungieSessionProviderParams` in [types.ts](lib/types.ts)
 
 ```tsx
 // /app/layout.tsx
@@ -129,17 +130,17 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   // Optional: to avoid extra round trips, grab the session from the cookies at the time of the request
-  const serverSession = getServerSession();
+  const session = getServerSession();
 
   return (
     <html lang="en">
       <body>
         <main>
           <BungieSessionProvider
-            // You can customize these paths, however, they must align with the location of your route handlers
+            {/* You can customize these paths, however, they must align with the location of your route handlers */}
             sessionPath="/api/auth/authorize"
             deauthorizePath="/api/auth/deauthorize"
-            initialSession={serverSession}
+            initialSession={session}
           >
             {children}
           </BungieSessionProvider>
@@ -167,17 +168,16 @@ export const MyComponent = () => {
     <div>
       {session.status === "authorized" ? (
         <div>
-          <button onClick={() => session.end()}>Sign Out</button>
-          <button onClick={() => session.end(true)}>Sign Out (Reload)</button>
+          <button onClick={() => session.kill()}>Sign Out</button>
         </div>
       ) : (
         <div>
           <button>
-            <a href="/api/auth/login">Sign In</a>
+            <a href="/api/auth/signin">Sign In</a>
           </button>
 
           <button>
-            <a href="/api/auth/login?reauth=true">Sign (Force Re-Auth)</a>
+            <a href="/api/auth/signin?reauth=true">Sign (Force Re-Auth)</a>
           </button>
         </div>
       )}
@@ -188,7 +188,7 @@ export const MyComponent = () => {
       <pre>{JSON.stringify(session, null, 2)}</pre>
       <div>
         <button onClick={() => session.refresh()}>Refresh</button>
-        <button onClick={() => session.refresh(true)}>Refresh (soft)</button>
+        <button onClick={() => session.refresh(true)}>Refresh (force)</button>
       </div>
     </div>
   );
@@ -201,7 +201,7 @@ In order to use Bungie's OAuth, you must use HTTPS. Next.js provides built in su
 
 ## What does this library not do?
 
-This library does not handle network or refetching client side on an error. The session state provides the tools needed to identify a network or client error and refetch, but the user will need to manually implement this retry logic
+This library does not handle most network errors or refetching client side on an error. The session state provides the tools needed to identify a network or client error and refetch, but the user will need to manually implement this retry logic
 
 ## Questions?
 

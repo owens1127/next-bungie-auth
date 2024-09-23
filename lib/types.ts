@@ -1,5 +1,5 @@
 import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
-import type { NextRequest } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 
 export type NextBungieAuth = {
   /**
@@ -10,23 +10,26 @@ export type NextBungieAuth = {
     /**
      * Redirects the user to the Bungie OAuth page.
      */
-    authorizeGET: (request: NextRequest) => void;
+    authorizeGET: (request: NextRequest) => never;
     /**
      * Deauthorizes the user's Bungie OAuth session.
      */
-    deauthorizePOST: (request: NextRequest) => void;
+    deauthorizePOST: (
+      request: NextRequest
+    ) => NextResponse<NextBungieAuthSessionResponse>;
     /**
      * Handles the callback from the Bungie OAuth page.
      */
-    callbackGET: (request: NextRequest) => void;
+    callbackGET: (request: NextRequest) => Promise<never>;
     /**
      * Retrieves the user's Bungie OAuth session. Refreshes the session
      * if the `minimumRefreshInterval` has passed, if the auth token is expired,
      * or if ?force=true is passed.
      */
-    sessionGET: (request: NextRequest) => void;
+    sessionGET: (
+      request: NextRequest
+    ) => Promise<NextResponse<NextBungieAuthSessionResponse>>;
   };
-
   /**
    * Server-side helper functions for managing the session in server-side logic
    */
@@ -50,9 +53,21 @@ export type NextBungieAuth = {
       iat: Date
     ) => Promise<void>;
     /**
-     * Retrieves the current server session. Does not refresh the session.
+     * Synchronously retrieves the current server session from the request cookies.
+     * Does not refresh the session, so it may be expired.
      */
     getServerSession: () => NextBungieAuthSessionResponse;
+    /**
+     * Retrieves the current server session from the cookies and refreshes it if expired.
+     * Can only be called from an API route or a server-action.
+     *
+     * @param opts.force - If true, the session will be refreshed even if it is not expired
+     * and outside the grace period.
+     */
+    getRefreshedServerSession: (opts: { force: boolean }) => Promise<{
+      session: NextBungieAuthSessionResponse;
+      message: string;
+    }>;
   };
 };
 
@@ -103,38 +118,26 @@ export type NextBungieAuthConfig = {
    */
   generateState: (request: NextRequest) => string;
   /**
-   * Callback function to determine the callback URL for the OAuth request.
-   * Defaults to the origin of the request URL if successful, or the origin with `/error` if not.
-   * @param request - The NextRequest object.
-   * @param success - If the callback is successful.
-   * @returns The NextResponse object or void.
-   */
-  getCallbackURL: (request: NextRequest, success: boolean) => string;
-  /**
-   * Function to make HTTP request given the search parameters.
+   * Function to make HTTP request given the parameters.
    * Defaults to a fetch request using the native fetch API to the Bungie API.
-   *
-   * IMPORTANT: The function must throw a `BungieAuthorizationError` if the API returns a known error.
    *
    * @returns A promise that resolves to the Bungie token response.
    * @throws BungieAuthorizationError | Error
    */
-  tokenHttp: (searchParams: URLSearchParams) => Promise<BungieTokenResponse>;
-  /**
-   * Callback function to log errors as you wish.
-   */
-  logError: (
-    path: "authorize" | "deauthorize" | "callback" | "session",
-    error: Error,
-    state?: string
-  ) => void;
+  tokenHttp: (params: {
+    clientId: string;
+    clientSecret: string;
+    grantType: "authorization_code" | "refresh_token";
+    grantKey: "code" | "refresh_token";
+    value: string;
+  }) => Promise<Response>;
   /**
    * Callback function to log events as you wish.
    */
-  logResponse: (
+  logRequest: (
     path: "authorize" | "deauthorize" | "callback" | "session",
-    statusCode: number,
-    state?: string
+    success: boolean,
+    message?: string
   ) => void;
 };
 
@@ -147,10 +150,6 @@ export type BungieTokenResponse = {
   membership_id: string;
 };
 
-export type NextBungieAuthJWTPayload = BungieTokenResponse & {
-  iat: number;
-};
-
 /**
  * The data returned from the session API route.
  *
@@ -159,46 +158,58 @@ export type NextBungieAuthJWTPayload = BungieTokenResponse & {
 export type NextBungieAuthSessionData = {
   bungieMembershipId: string;
   accessToken: string;
-  accessTokenExpiresAt: number;
-  refreshToken: string;
-  refreshTokenExpiresAt: number;
-  createdAt: number;
+  accessTokenExpiresAt: string;
+};
+
+export type NextBungieAuthSaleSessionData = {
+  bungieMembershipId: string;
 };
 
 export type NextBungieAuthSessionResponse =
   | {
-      status: "unauthorized" | "error";
+      status: "expired" | "unauthorized" | "error";
       data: null;
     }
   | {
-      status: "authorized" | "bungie-api-offline";
-      data: NextBungieAuthSessionData;
+      status: "stale" | "disabled";
+      data: NextBungieAuthSaleSessionData;
     }
   | {
-      status: "authorized" | "bungie-api-offline";
+      status: "authorized";
       data: NextBungieAuthSessionData;
     };
 
 /**
  * Options for the BungieSessionProvider.
- *
- * @param sessionPath - The path to the session API route.
- * @param deauthorizePath - The path to the deauthorize API route.
- * @param initialSession - An optional (recommended) initial session fetched server-side. Saves
- * a round trip to the server.
- * @param enableAutomaticRefresh - Default `true`. When enabled, the session will automatically
- * refresh when the access token is about to expire.
- * @param fetchOverride - An optional override instead of the default browser implementation
- * of `fetch`.
- *
  */
-export type BungieSessionProviderOptions = {
+export type BungieSessionProviderParams = {
   children: React.ReactNode;
-  sessionPath: string;
-  deauthorizePath: string;
   initialSession?: NextBungieAuthSessionResponse;
+  /**
+   * The path to the session API route.
+   */
+  sessionPath: string;
+  /**
+   * The path to the deauthorize API route.
+   */
+  deauthorizePath: string;
+  /**
+   * Default `true`. When enabled, the session will automatically
+   * refresh when the access token is about to expire.
+   */
   enableAutomaticRefresh?: boolean;
+  /**
+   * Default `true`. When `enableAutomaticRefresh` is enabled and this argument
+   * is set to true, the session will refresh even when the tab is in the background.
+   */
+  refreshInBackground?: boolean;
+  /**
+   * Handler errors that occur during the client-side session refresh.
+   */
   onError?: (error: Error, type: "client" | "server" | "network") => void;
+  /**
+   * A custom fetch function to use for the client-side session refresh.
+   */
   fetchOverride?: typeof fetch;
 };
 
@@ -207,48 +218,63 @@ export type BungieSessionProviderOptions = {
  */
 export type BungieSession = BungieSessionState & {
   /**
-   * Logs the user out by removing the session cookie and optionally reloads the page.
-   */
-  end: (reload?: boolean) => void;
-  /**
-   * Refreshes the session. If `soft` is true, the session will only refresh from bungie.net
+   * Refreshes the session. If `force` is false (default), the session will only refresh from bungie.net
    * when expired or inside the grace period.
    */
-  refresh: (soft?: boolean) => void;
+  refresh: (force?: boolean) => void;
+  /**
+   * Logs the user out by removing the session cookie.
+   */
+  kill: () => void;
 };
 
 /**
  * The state of the Bungie session. It is a discriminated union type to allow type narrowing.
+ *
+ * A session can be in one of the following states:
+ * - `pending` - The session is being fetched.
+ * - `authorized` - The session is authorized and the data is available.
+ * - `unauthorized` - There is no session and the data is null.
+ * - `unavailable` - The session is unavailable at the moment and the data is available or stale.
  */
-export type BungieSessionState = {
-  isPending: boolean;
-  isFetching: boolean;
-  data: null | NextBungieAuthSessionData;
-} & (
+export type BungieSessionState = (
   | {
-      isError: true;
-      error: "bungie-api-offline" | "network" | "server" | "client";
-    }
-  | {
+      status: "pending";
+      isPending: true;
+      isFetching: boolean;
       isError: false;
       error: undefined;
+      data: null | NextBungieAuthSaleSessionData;
+    }
+  | {
+      status: "authorized";
+      isPending: false;
+      isFetching: boolean;
+      isError: boolean;
+      data: NextBungieAuthSessionData;
+    }
+  | {
+      status: "unauthorized";
+      isPending: false;
+      isFetching: boolean;
+      isError: boolean;
+      data: null;
+    }
+  | {
+      status: "unavailable";
+      isPending: false;
+      isFetching: boolean;
+      isError: true;
+      data: NextBungieAuthSaleSessionData;
     }
 ) &
   (
     | {
-        status: "pending";
-        isPending: true;
+        isError: true;
+        error: "bungie-api-offline" | "network" | "server" | "client";
+      }
+    | {
         isError: false;
-        data: null;
-      }
-    | {
-        status: "unauthorized";
-        isPending: false;
-        data: null;
-      }
-    | {
-        status: "authorized";
-        isPending: false;
-        data: NextBungieAuthSessionData;
+        error: undefined;
       }
   );

@@ -1,17 +1,22 @@
 {
   "include": ["./**/*"],
+  "exclude": ["node_modules", "**/*.config.*"],
   "compilerOptions": {
     "rootDir": "./",
     "outDir": "../dist",
-    "lib": ["ES2020", "DOM"],
+
+    "lib": ["ESNext", "DOM"],
     "moduleDetection": "force",
-    "allowJs": true,
+    "allowJs": false,
+
     "module": "esnext",
     "esModuleInterop": true,
     "moduleResolution": "node",
     "target": "ESNext",
-    "types": [],
+
     "jsx": "react-jsx",
+
+    "types": [],
     "declaration": true,
     "strict": true,
     "skipLibCheck": true,
