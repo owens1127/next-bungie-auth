@@ -308,16 +308,18 @@ export const BungieSessionProvider = ({
  * This allows you to use the `useAuthorizedBungieSession` hook which guarantees
  * the session is authorized in your components.
  *
- * If a redirect is provided and the session is unauthorized, the user will be
- * redirected to the provided URL. Commonly used for sign-in pages.
+ * If a onUnauthorized is provided and the session is unauthorized, function
+ * will be called. Commonly used for redirects sign-in pages.
  */
 export const BungieSessionSuspender = ({
-  redirect,
+  onUnauthorized,
   fallback,
   children,
 }: {
   children: React.ReactNode;
-  redirect?: string;
+  onUnauthorized?: (
+    session: BungieSession & { status: "unauthorized" }
+  ) => void;
   fallback: (
     state: BungieSession & {
       status: "unauthorized" | "unavailable" | "pending";
@@ -326,6 +328,7 @@ export const BungieSessionSuspender = ({
 }) => {
   const router = useRouter();
   const session = React.useContext(AuthContext);
+  const onUnauthorizedRef = React.useRef(onUnauthorized); // Store the callback in a ref to avoid effects when it changes
 
   if (session === undefined) {
     throw new TypeError(
@@ -333,9 +336,15 @@ export const BungieSessionSuspender = ({
     );
   }
 
-  if (session.status === "unauthorized" && typeof redirect === "string") {
-    router.replace(redirect);
-  }
+  React.useEffect(() => {
+    onUnauthorizedRef.current = onUnauthorized;
+  }, [onUnauthorized]);
+
+  React.useEffect(() => {
+    if (session.status === "unauthorized" && onUnauthorizedRef.current) {
+      onUnauthorizedRef.current(session);
+    }
+  }, [router, session]);
 
   if (session.status !== "authorized") {
     return fallback(session);

@@ -1,6 +1,6 @@
 {
   "name": "next-bungie-auth",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "keywords": [
     "auth",
     "bungie",
@@ -10,7 +10,10 @@
     "nextjs"
   ],
   "homepage": "https://github.com/owens1127/next-bungie-auth",
-  "repository": "owens1127/next-bungie-auth",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/owens1127/next-bungie-auth.git"
+  },
   "license": "MIT",
   "files": [
     "./**/*.js",
