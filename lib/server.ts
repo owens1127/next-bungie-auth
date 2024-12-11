@@ -191,10 +191,15 @@ export const createNextBungieAuth = (
         return buildNextResponse(session, statusCode);
       };
 
-      if (session.status === "authorized") {
-        return getResonse(true, 200);
-      } else {
-        return getResonse(false, 401);
+      switch (session.status) {
+        case "authorized":
+          return getResonse(true, 200);
+        case "error":
+          return getResonse(false, 500);
+        case "disabled":
+          return getResonse(false, 503);
+        default:
+          return getResonse(false, 401);
       }
     },
   };

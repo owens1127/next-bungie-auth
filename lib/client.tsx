@@ -124,15 +124,37 @@ export const BungieSessionProvider = ({
       })
         .then(async (res) => {
           try {
+            if (res.status === 404) {
+              throw new Error(
+                `${refresh ? "Refresh" : "Session"} route not found`,
+                {
+                  cause: res,
+                }
+              );
+            }
+
             if (
               !res.headers.get("content-type")?.includes("application/json")
             ) {
-              throw new Error("Invalid content type", {
-                cause: res,
+              throw new Error("Invalid response content type", {
+                cause: {
+                  contentType: res.headers.get("content-type"),
+                },
               });
             }
 
             const session: NextBungieAuthSessionResponse = await res.json();
+
+            if (
+              typeof session !== "object" ||
+              !("status" in session) ||
+              !("data" in session)
+            ) {
+              throw new Error("Invalid response body", {
+                cause: session,
+              });
+            }
+
             setSession((prev) =>
               deriveStateFromServer({
                 prevSession: prev,
@@ -148,7 +170,9 @@ export const BungieSessionProvider = ({
                   error: "server",
                 })
               );
+              onError?.(err as Error, "server");
             } else {
+              // Re-throw errors that are not server errors
               throw err;
             }
           }
@@ -156,13 +180,13 @@ export const BungieSessionProvider = ({
         .catch((err: Error) => {
           // Handle network and client side errors
           const errType = isNetworkError(err) ? "network" : "client";
-          onError?.(err, errType);
           setSession((prev) =>
             deriveErrorState({
               previous: prev,
               error: errType,
             })
           );
+          onError?.(err, errType);
         })
         .finally(() => {
           isUpdatingSession.current = false;
