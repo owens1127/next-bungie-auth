@@ -1,50 +1,68 @@
-import { cookies } from "next/headers";
 import type { BungieTokenResponse, NextBungieAuthConfig } from "./types";
 import { decodeToken, encodeToken } from "./tokens";
+import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 
 /** @internal */
-export const setStateCookie = (state: string, config: NextBungieAuthConfig) => {
-  cookies().set(`${config.baseCookieName}.state`, state, {
+export const setStateCookie = (
+  state: string,
+  cookieJar: ReadonlyRequestCookies,
+  config: NextBungieAuthConfig
+) => {
+  cookieJar.set(`${config.baseCookieName}.state`, state, {
     ...config.cookieOptions,
     maxAge: 900,
   });
 };
 
 /** @internal */
-export const getStateCookie = (config: NextBungieAuthConfig) => {
-  return cookies().get(`${config.baseCookieName}.state`)?.value;
+export const getStateCookie = (
+  cookieJar: ReadonlyRequestCookies,
+  config: NextBungieAuthConfig
+) => {
+  return cookieJar.get(`${config.baseCookieName}.state`)?.value;
 };
 
 /** @internal */
-export const clearStateCookie = (config: NextBungieAuthConfig) => {
-  cookies().delete(`${config.baseCookieName}.state`);
+export const clearStateCookie = (
+  cookieJar: ReadonlyRequestCookies,
+  config: NextBungieAuthConfig
+) => {
+  cookieJar.delete(`${config.baseCookieName}.state`);
 };
 
 /** @internal */
 export const setCallbackCookie = (
   callbackUrl: string,
+  cookieJar: ReadonlyRequestCookies,
   config: NextBungieAuthConfig
 ) => {
-  cookies().set(`${config.baseCookieName}.callback`, callbackUrl, {
+  cookieJar.set(`${config.baseCookieName}.callback`, callbackUrl, {
     ...config.cookieOptions,
     maxAge: 900,
   });
 };
 
 /** @internal */
-export const getCallbackCookie = (config: NextBungieAuthConfig) => {
-  return cookies().get(`${config.baseCookieName}.callback`)?.value;
+export const getCallbackCookie = (
+  cookieJar: ReadonlyRequestCookies,
+  config: NextBungieAuthConfig
+) => {
+  return cookieJar.get(`${config.baseCookieName}.callback`)?.value;
 };
 
 /** @internal */
-export const clearCallbackCookie = (config: NextBungieAuthConfig) => {
-  cookies().delete(`${config.baseCookieName}.callback`);
+export const clearCallbackCookie = (
+  cookieJar: ReadonlyRequestCookies,
+  config: NextBungieAuthConfig
+) => {
+  cookieJar.delete(`${config.baseCookieName}.callback`);
 };
 
 /** @internal */
-export const getAllCookies = (config: NextBungieAuthConfig) => {
-  const cookieJar = cookies();
-
+export const getAllCookies = (
+  cookieJar: ReadonlyRequestCookies,
+  config: NextBungieAuthConfig
+) => {
   const bungieMembershipId = cookieJar.get(
     `${config.baseCookieName}.membershipid`
   )?.value;
@@ -76,9 +94,9 @@ export const setAllCookies = (
     sessionExpires: Date;
     accessExpires: Date;
   },
+  cookieJar: ReadonlyRequestCookies,
   config: NextBungieAuthConfig
 ) => {
-  const cookieJar = cookies();
   cookieJar.set(`${config.baseCookieName}.membershipid`, tokens.membership_id, {
     ...config.cookieOptions,
     expires: sessionExpires,
@@ -111,8 +129,10 @@ export const setAllCookies = (
 };
 
 /** @internal */
-export const clearAllCookies = (config: NextBungieAuthConfig) => {
-  const cookieJar = cookies();
+export const clearAllCookies = (
+  cookieJar: ReadonlyRequestCookies,
+  config: NextBungieAuthConfig
+) => {
   ["membershipid", "access", "refresh", "expires"].forEach((key) => {
     cookieJar.delete(`${config.baseCookieName}.${key}`);
   });

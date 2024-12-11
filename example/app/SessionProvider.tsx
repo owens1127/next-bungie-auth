@@ -35,8 +35,6 @@ export const CustomSessionProvider = ({
   return (
     <QueryClientProvider client={queryClient}>
       <BungieSessionProvider
-        sessionPath="/api/auth/session"
-        deauthorizePath="/api/auth/signout"
         initialSession={serverSession}
         onError={(err, type) => {
           window.alert(`${type} error: ${err.message}`);

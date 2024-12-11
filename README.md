@@ -36,17 +36,12 @@ See [NextBungieAuthConfig](`/lib/types.ts`) for a list of all options.
 
 ```ts
 // /app/api/auth/index.ts
-import "server-only"; // this is an optional npm package which prevents your from accidentally importing server code on the client (npm install server-only)
+import "server-only"; // this is an optional npm package which prevents your from accidentally importing server code on the client
 import { createNextBungieAuth } from "next-bungie-auth/server";
 
 export const {
-  handlers: { authorizeGET, deauthorizePOST, callbackGET, sessionGET },
-  serverSideHelpers: {
-    getServerSession,
-    clearServerSession,
-    requestNewTokens,
-    updateServerSession,
-  },
+  catchAllHandler,
+  serverSideHelpers: { getServerSession },
 } = createNextBungieAuth({
   // Pass your config here
   clientId: process.env.BUNGIE_CLIENT_ID!,
@@ -60,48 +55,21 @@ export const {
 
 The `createNextBungieAuth` function provides several route handlers that you can use in your Next.js API routes.
 
-#### `authorizeGET`
+- `authorizeGET`: Redirects the user to Bungie's OAuth page
+- `deauthorizePOST`: Deauthorizes the user's session
+- `callbackGET`: Handles the OAuth callback from Bungie
+- `sessionGET`: Returns the current session
+- `refreshPOST`: Refreshes the current session
 
-This handler initiates the Bungie.net OAuth2 authorization flow. You can use it in your API route like this for example
-
-```ts
-// /app/api/auth/authorize/route.ts
-export { authorizeGET as GET } from "..";
-// optional: this library supports the edge run time
-export const runtime = "edge";
-```
-
-#### `deauthorizePOST`
-
-This handler deauthorizes/logs the user out of current session by clearing their cookies. You can use it in your API route like this:
+However, the easier way is to use the catch-all route handler, which will automatically set up the routes for you.
 
 ```ts
-// /app/api/auth/deauthorize/route.ts
-export { deauthorizePOST as POST } from "..";
-// optional: this library supports the edge run time
-export const runtime = "edge";
-```
+// /app/api/auth/[...bungie]/route.ts
+import { catchAllHandler } from "..";
 
-#### `callbackGET`
+const { GET, POST } = catchAllHandler;
 
-This handler handles the callback from Bungie.net after the user has authorized your application. You can use it in your API route like this:
-
-```ts
-// /app/api/auth/callback/route.ts
-export { callbackGET as GET } from "..";
-// optional: this library supports the edge run time
-export const runtime = "edge";
-```
-
-#### `sessionGET`
-
-This handler returns the current session data from the cookies and refreshes it if needed. You can use it in your API route like this:
-
-```ts
-// /app/api/auth/session/route.ts
-export { sessionGET as GET } from "..";
-// optional: this library supports the edge run time
-export const runtime = "edge";
+export { GET, POST };
 ```
 
 To use the Bungie authentication in your Next.js pages, you can use the `useBungieSession` hook from [`client.tsx`](lib/client.tsx). This hook provides the current Bungie session context.
@@ -112,8 +80,6 @@ Now that you have set up your server-side logic, it is likely that you will also
 
 You can use the `BungieSessionProvider` from [`client.tsx`](lib/client.tsx) to provide a Bungie session context to your components. It is recommended to place this component in the **root layout**. This provider takes several options:
 
-- `sessionPath`: The path to the session.
-- `deauthorizePath`: The path to deauthorize the session.
 - `initialSession`: The initial session data.
 - `enableAutomaticRefresh`: (Default true) Whether to enable automatic session refresh.
 - `refreshInBackground`: Whether or not automatic refreshes happen when the browser tab is hidden
@@ -123,6 +89,7 @@ You can use the `BungieSessionProvider` from [`client.tsx`](lib/client.tsx) to p
 // /app/layout.tsx
 import { getServerSession } from "./api/auth";
 import { BungieSessionProvider } from "next-bungie-auth/client";
+import { cookies } from "next/headers";
 
 export default async function RootLayout({
   children,
@@ -130,18 +97,14 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   // Optional: to avoid extra round trips, grab the session from the cookies at the time of the request
-  const session = getServerSession();
+  const cookieJar = await cookies();
+  const session = getServerSession(cookieJar);
 
   return (
     <html lang="en">
       <body>
         <main>
-          <BungieSessionProvider
-            {/* You can customize these paths, however, they must align with the location of your route handlers */}
-            sessionPath="/api/auth/authorize"
-            deauthorizePath="/api/auth/deauthorize"
-            initialSession={session}
-          >
+          <BungieSessionProvider initialSession={session}>
             {children}
           </BungieSessionProvider>
         </main>
@@ -173,11 +136,11 @@ export const MyComponent = () => {
       ) : (
         <div>
           <button>
-            <a href="/api/auth/signin">Sign In</a>
+            <a href="/api/auth/authorize">Sign In</a>
           </button>
 
           <button>
-            <a href="/api/auth/signin?reauth=true">Sign (Force Re-Auth)</a>
+            <a href="/api/auth/authorize?reauth=true">Sign (Force Re-Auth)</a>
           </button>
         </div>
       )}
@@ -187,8 +150,7 @@ export const MyComponent = () => {
       </div>
       <pre>{JSON.stringify(session, null, 2)}</pre>
       <div>
-        <button onClick={() => session.refresh()}>Refresh</button>
-        <button onClick={() => session.refresh(true)}>Refresh (force)</button>
+        <button onClick={() => session.refresh()}>Refresh Session</button>
       </div>
     </div>
   );

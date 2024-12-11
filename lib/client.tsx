@@ -68,8 +68,6 @@ export const useAuthorizedBungieSession = (): BungieSession & {
  * @example
  * ```tsx
  * <BungieSessionProvider
- *   sessionPath="/api/auth/session"
- *   deauthorizePath="/api/auth/signout"
  *   initialSession={serverSession}
  *   onError={(err, type) => console.error(err, type)}
  * >
@@ -80,16 +78,18 @@ export const useAuthorizedBungieSession = (): BungieSession & {
 export const BungieSessionProvider = ({
   children,
   initialSession,
-  sessionPath,
-  deauthorizePath,
+  sessionPath = "/api/auth/session",
+  deauthorizePath = "/api/auth/deauthorize",
+  refreshPath = "/api/auth/refresh",
   enableAutomaticRefresh = true,
   refreshInBackground = true,
   fetchOverride: customFetch = fetch,
+  timeBeforeRefresh = 30000,
   onError,
 }: BungieSessionProviderParams) => {
   const [isOnline, setIsOnline] = React.useState(true);
   const [isVisible, setIsVisible] = React.useState(true);
-  const isFetching = React.useRef<boolean>(false);
+  const isUpdatingSession = React.useRef<boolean>(false);
   const isDeauthorizing = React.useRef<boolean>(false);
 
   const [session, setSession] = React.useState<BungieSessionState>(() => {
@@ -97,7 +97,7 @@ export const BungieSessionProvider = ({
       return {
         status: "pending",
         isPending: true,
-        isFetching: false,
+        isFetching: true,
         isError: false,
         data: null,
         error: undefined,
@@ -111,17 +111,16 @@ export const BungieSessionProvider = ({
   });
 
   const fetchAndUpdateSession = React.useCallback(
-    (force: boolean = false) => {
-      if (isFetching.current) {
+    (refresh: boolean = false) => {
+      if (isUpdatingSession.current) {
         return;
       }
 
-      isFetching.current = true;
+      isUpdatingSession.current = true;
       setSession((prev) => deriveLoadingState({ previous: prev }));
 
-      const path = force ? `${sessionPath}?force=true` : sessionPath;
-      customFetch(path, {
-        method: "GET",
+      customFetch(refresh ? refreshPath : sessionPath, {
+        method: refresh ? "POST" : "GET",
       })
         .then(async (res) => {
           try {
@@ -166,10 +165,10 @@ export const BungieSessionProvider = ({
           );
         })
         .finally(() => {
-          isFetching.current = false;
+          isUpdatingSession.current = false;
         });
     },
-    [isFetching, customFetch, sessionPath, onError]
+    [isUpdatingSession, customFetch, sessionPath, onError]
   );
 
   const deauthorize = React.useCallback(() => {
@@ -214,26 +213,28 @@ export const BungieSessionProvider = ({
 
   /**
    * Calculates the time until the next session refresh.
-   * Returns 0 to indicate that the session should not be refreshed.
+   * Returns false to indicate that the session should not be refreshed.
    */
   const calculateMsToNextRefresh = React.useCallback(
-    (session: BungieSessionState): number => {
+    (session: BungieSessionState): number | false => {
       switch (session.status) {
+        case "stale":
+          return 0;
         case "authorized":
           return Math.max(
-            1,
+            0,
             new Date(session.data.accessTokenExpiresAt).getTime() -
-              30000 -
+              timeBeforeRefresh -
               Date.now()
           );
         case "unavailable":
           return 5 * 60000;
         case "pending":
         case "unauthorized":
-          return 0;
+          return false;
       }
     },
-    []
+    [timeBeforeRefresh]
   );
 
   React.useEffect(() => {
@@ -249,7 +250,7 @@ export const BungieSessionProvider = ({
       (isVisible || refreshInBackground)
     ) {
       const timeoutTime = calculateMsToNextRefresh(session);
-      if (timeoutTime > 0) {
+      if (timeoutTime !== false) {
         const timeout = setTimeout(
           () => fetchAndUpdateSession(true),
           timeoutTime
@@ -288,12 +289,21 @@ export const BungieSessionProvider = ({
     };
   }, []);
 
+  // These methods are memoized to prevent unnecessary re-renders but also act as wrappers
+  // asto not expose them to the consumer
+
+  const refresh = React.useCallback(
+    () => fetchAndUpdateSession(true),
+    [fetchAndUpdateSession]
+  );
+  const kill = React.useCallback(() => deauthorize(), [deauthorize]);
+
   return (
     <AuthContext.Provider
       value={{
         ...session,
-        refresh: fetchAndUpdateSession,
-        kill: deauthorize,
+        refresh,
+        kill,
       }}
     >
       {children}
@@ -322,7 +332,7 @@ export const BungieSessionSuspender = ({
   ) => void;
   fallback: (
     state: BungieSession & {
-      status: "unauthorized" | "unavailable" | "pending";
+      status: "unauthorized" | "unavailable" | "stale" | "pending";
     }
   ) => React.ReactNode;
 }) => {
@@ -396,6 +406,15 @@ function deriveLoadingState({
         data: null,
         error: undefined,
       };
+    case "stale":
+      return {
+        status: previous.status,
+        isPending: true,
+        isFetching: true,
+        isError: previous.isError,
+        data: previous.data,
+        error: previous.error,
+      };
     case "authorized":
     case "unauthorized":
     case "unavailable":
@@ -432,7 +451,7 @@ function deriveStateFromServer({
       };
     case "stale":
       return {
-        status: "pending",
+        status: "stale",
         isPending: true,
         isFetching: false,
         isError: false,

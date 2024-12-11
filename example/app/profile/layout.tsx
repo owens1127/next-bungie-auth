@@ -12,11 +12,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             return (
               <div>
                 <Button asChild>
-                  <a href="/api/auth/signin">Sign In</a>
+                  <a href="/api/auth/authorize">Sign In</a>
                 </Button>
 
                 <Button asChild>
-                  <a href="/api/auth/signin?reauth=true">
+                  <a href="/api/auth/authorize?reauth=true">
                     Sign (Force Re-Approval)
                   </a>
                 </Button>
