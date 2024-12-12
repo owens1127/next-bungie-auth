@@ -1,3 +1,4 @@
+import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 import { clearAllCookies, getAllCookies, setAllCookies } from "./cookies";
 import { BungieAuthorizationError } from "./error";
 import { getTokens } from "./tokens";
@@ -7,7 +8,7 @@ import type {
 } from "./types";
 
 export const refreshSession = async (
-  { force }: { force: boolean },
+  cookies: ReadonlyRequestCookies,
   config: NextBungieAuthConfig
 ): Promise<{
   session: NextBungieAuthSessionResponse & {
@@ -15,8 +16,7 @@ export const refreshSession = async (
   };
   message: string;
 }> => {
-  const { bungieMembershipId, refreshToken, accessToken, accessExpires } =
-    getAllCookies(config);
+  const { bungieMembershipId, refreshToken } = getAllCookies(cookies, config);
 
   if (!bungieMembershipId || !refreshToken) {
     return {
@@ -25,25 +25,6 @@ export const refreshSession = async (
         data: null,
       },
       message: "No session found",
-    };
-  }
-
-  if (
-    !force &&
-    accessToken &&
-    accessExpires.getTime() - Date.now() / 1000 >
-      config.sessionRefreshGracePeriod
-  ) {
-    return {
-      session: {
-        status: "authorized",
-        data: {
-          bungieMembershipId,
-          accessToken: accessToken,
-          accessTokenExpiresAt: accessExpires.toISOString(),
-        },
-      },
-      message: `Token is still valid for ${Math.floor((accessExpires.getTime() - Date.now()) / 60000)} minutes`,
     };
   }
 
@@ -69,6 +50,7 @@ export const refreshSession = async (
         sessionExpires,
         tokens,
       },
+      cookies,
       config
     );
 
@@ -105,7 +87,7 @@ export const refreshSession = async (
         message: `${err.error}: ${err.error_description}`,
       };
     } else {
-      clearAllCookies(config);
+      clearAllCookies(cookies, config);
       return {
         session: {
           status: "expired",
@@ -114,5 +96,56 @@ export const refreshSession = async (
         message: `${err.error}: ${err.error_description}`,
       };
     }
+  }
+};
+
+export const getSession = async (
+  cookies: ReadonlyRequestCookies,
+  config: NextBungieAuthConfig
+): Promise<{
+  session: NextBungieAuthSessionResponse & {
+    status: "authorized" | "unauthorized" | "stale";
+  };
+  message: string;
+}> => {
+  const { bungieMembershipId, refreshToken, accessToken, accessExpires } =
+    getAllCookies(cookies, config);
+
+  if (!bungieMembershipId || !refreshToken) {
+    return {
+      session: {
+        status: "unauthorized",
+        data: null,
+      },
+      message: "No session found",
+    };
+  }
+
+  if (
+    accessToken &&
+    accessExpires.getTime() - Date.now() / 1000 >
+      config.sessionRefreshGracePeriod
+  ) {
+    return {
+      session: {
+        status: "authorized",
+        data: {
+          bungieMembershipId,
+          accessToken: accessToken,
+          accessTokenExpiresAt: accessExpires.toISOString(),
+        },
+      },
+      message: `Token is still valid for ${Math.floor((accessExpires.getTime() - Date.now()) / 60000)} minutes`,
+    };
+  } else {
+    return {
+      session: {
+        status: "stale",
+        data: {
+          bungieMembershipId,
+        },
+      },
+      message: "Token is stale",
+    };
   }
 };

@@ -1,6 +1,6 @@
 {
   "name": "next-bungie-auth",
-  "version": "2.1.0",
+  "version": "3.0.1",
   "keywords": [
     "auth",
     "bungie",
@@ -34,7 +34,7 @@
     }
   },
   "peerDependencies": {
-    "next": ">=13.5.1",
+    "next": ">=15",
     "react": ">=18.2.0"
   }
 }

@@ -1,8 +1,9 @@
-import { getServerSession } from "./api/auth";
 import { CustomSessionProvider } from "./SessionProvider";
 import { Inter } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
+import { getServerSession } from "./api/auth";
+import { cookies } from "next/headers";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -11,7 +12,7 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "Bungie Next Auth Example",
+  title: "Next Bungie Auth Example",
 };
 
 export default async function RootLayout({
@@ -19,7 +20,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = getServerSession();
+  const cookieJar = await cookies();
+  const session = getServerSession(cookieJar);
 
   return (
     <html lang="en" className={`${inter.variable} font-sans`}>

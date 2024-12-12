@@ -33,14 +33,11 @@ export default function Page() {
             <Button onClick={() => session.refresh()} variant="secondary">
               Refresh
             </Button>
-            <Button onClick={() => session.refresh(true)} variant="secondary">
-              Refresh (force)
-            </Button>
           </>
         )}
         {session.status === "unauthorized" && (
           <Button asChild>
-            <a href="/api/auth/signin">Sign In</a>
+            <a href="/api/auth/authorize">Sign In</a>
           </Button>
         )}
       </CardFooter>

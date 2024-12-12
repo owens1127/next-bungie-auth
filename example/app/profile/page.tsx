@@ -47,11 +47,7 @@ export default function Page() {
                 {data.destinyMemberships?.map((membership) => (
                   <Card
                     key={membership.membershipId}
-                    className={`bg-gray-700 border-2 ${
-                      membership.membershipId === data.primaryMembershipId
-                        ? "border-amber-400"
-                        : "border-gray-600"
-                    }`}
+                    className={`bg-gray-700 border-2`}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-center space-x-4 mb-4">

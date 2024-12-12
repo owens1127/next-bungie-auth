@@ -1,32 +1,44 @@
 import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
+import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 import type { NextRequest, NextResponse } from "next/server";
 
 export type NextBungieAuth = {
   /**
-   * The Next.js API routes for Bungie OAuth. These routes should be destructured and exported
-   * in a route handler file.
+   * The single handler for Bungie OAuth. Wraps the individual handlers.
+   */
+  catchAllHandler: {
+    POST: (request: NextRequest) => Promise<NextResponse | never>;
+    GET: (request: NextRequest) => Promise<NextResponse | never>;
+  };
+  /**
+   * The Next.js API routes for Bungie OAuth for my fain grained control.
+   * These routes should be destructured and exported individually in a route handler file.
    */
   handlers: {
     /**
      * Redirects the user to the Bungie OAuth page.
      */
-    authorizeGET: (request: NextRequest) => never;
+    authorizeGET: (request: NextRequest) => Promise<NextResponse | never>;
     /**
      * Deauthorizes the user's Bungie OAuth session.
      */
     deauthorizePOST: (
       request: NextRequest
-    ) => NextResponse<NextBungieAuthSessionResponse>;
+    ) => Promise<NextResponse<NextBungieAuthSessionResponse>>;
     /**
      * Handles the callback from the Bungie OAuth page.
      */
     callbackGET: (request: NextRequest) => Promise<never>;
     /**
-     * Retrieves the user's Bungie OAuth session. Refreshes the session
-     * if the `minimumRefreshInterval` has passed, if the auth token is expired,
-     * or if ?force=true is passed.
+     * Retrieves the user's Bungie OAuth session.
      */
     sessionGET: (
+      request: NextRequest
+    ) => Promise<NextResponse<NextBungieAuthSessionResponse>>;
+    /**
+     * Refreshes the user's Bungie OAuth session.
+     */
+    refreshPOST: (
       request: NextRequest
     ) => Promise<NextResponse<NextBungieAuthSessionResponse>>;
   };
@@ -37,34 +49,35 @@ export type NextBungieAuth = {
     /**
      * Clears the session cookie
      */
-    clearServerSession: () => void;
+    clearServerSession: (cookies: ReadonlyRequestCookies) => void;
     /**
      * Requests new tokens from the Bungie API.
      */
     requestNewTokens: (
       grantType: "authorization_code" | "refresh_token",
-      value: string
+      value: string,
+      cookies: ReadonlyRequestCookies
     ) => Promise<BungieTokenResponse>;
     /**
      * Updates the server session with new tokens.
      */
     updateServerSession: (
       tokens: BungieTokenResponse,
-      iat: Date
+      iat: Date,
+      cookies: ReadonlyRequestCookies
     ) => Promise<void>;
     /**
      * Synchronously retrieves the current server session from the request cookies.
      * Does not refresh the session, so it may be expired.
      */
-    getServerSession: () => NextBungieAuthSessionResponse;
+    getServerSession: (
+      cookies: ReadonlyRequestCookies
+    ) => NextBungieAuthSessionResponse;
     /**
-     * Retrieves the current server session from the cookies and refreshes it if expired.
+     * Retrieves the current server session from the cookies and refreshes.
      * Can only be called from an API route or a server-action.
-     *
-     * @param opts.force - If true, the session will be refreshed even if it is not expired
-     * and outside the grace period.
      */
-    getRefreshedServerSession: (opts: { force: boolean }) => Promise<{
+    getRefreshedServerSession: (cookies: ReadonlyRequestCookies) => Promise<{
       session: NextBungieAuthSessionResponse;
       message: string;
     }>;
@@ -135,7 +148,7 @@ export type NextBungieAuthConfig = {
    * Callback function to log events as you wish.
    */
   logRequest: (
-    path: "authorize" | "deauthorize" | "callback" | "session",
+    path: "authorize" | "deauthorize" | "callback" | "session" | "refresh",
     success: boolean,
     message?: string
   ) => void;
@@ -187,22 +200,37 @@ export type BungieSessionProviderParams = {
   initialSession?: NextBungieAuthSessionResponse;
   /**
    * The path to the session API route.
+   * @default "/api/auth/session"
    */
-  sessionPath: string;
+  sessionPath?: string;
+  /**
+   * The path to the refresh session API route.
+   * @default "/api/auth/refresh"
+   */
+  refreshPath?: string;
   /**
    * The path to the deauthorize API route.
+   * @default "/api/auth/signout"
    */
-  deauthorizePath: string;
+  deauthorizePath?: string;
   /**
-   * Default `true`. When enabled, the session will automatically
+   * When enabled, the session will automatically
    * refresh when the access token is about to expire.
+   * @default true
    */
   enableAutomaticRefresh?: boolean;
   /**
-   * Default `true`. When `enableAutomaticRefresh` is enabled and this argument
+   * When `enableAutomaticRefresh` is enabled and this argument
    * is set to true, the session will refresh even when the tab is in the background.
+   * @default true
    */
   refreshInBackground?: boolean;
+  /**
+   * The time in seconds before the access token expires when calls to the session
+   * endpoint will refresh the session.
+   * @default 30_000 // (30 seconds)
+   */
+  timeBeforeRefresh?: number;
   /**
    * Handler errors that occur during the client-side session refresh.
    */
@@ -233,6 +261,7 @@ export type BungieSession = BungieSessionState & {
  *
  * A session can be in one of the following states:
  * - `pending` - The session is being fetched.
+ * - `stale` - The session is stale, meaning there is no auth token but the data is available.
  * - `authorized` - The session is authorized and the data is available.
  * - `unauthorized` - There is no session and the data is null.
  * - `unavailable` - The session is unavailable at the moment and the data is available or stale.
@@ -240,6 +269,14 @@ export type BungieSession = BungieSessionState & {
 export type BungieSessionState = (
   | {
       status: "pending";
+      isPending: true;
+      isFetching: true;
+      isError: false;
+      error: undefined;
+      data: null;
+    }
+  | {
+      status: "stale";
       isPending: true;
       isFetching: boolean;
       isError: false;

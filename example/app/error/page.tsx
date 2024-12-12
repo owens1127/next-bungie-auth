@@ -16,11 +16,13 @@ export default function Page() {
       ) : (
         <div>
           <button>
-            <a href="/api/auth/signin">Sign In</a>
+            <a href="/api/auth/authorize">Sign In</a>
           </button>
 
           <button>
-            <a href="/api/auth/signin?reauth=true">Sign (Force Re-Approval)</a>
+            <a href="/api/auth/authorize?reauth=true">
+              Sign (Force Re-Approval)
+            </a>
           </button>
         </div>
       )}
@@ -31,7 +33,6 @@ export default function Page() {
       <pre>{JSON.stringify(session, null, 2)}</pre>
       <div>
         <button onClick={() => session.refresh()}>Refresh</button>
-        <button onClick={() => session.refresh(true)}>Refresh (force)</button>
       </div>
     </div>
   );
