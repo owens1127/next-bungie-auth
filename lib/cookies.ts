@@ -1,6 +1,6 @@
 import type { BungieTokenResponse, NextBungieAuthConfig } from "./types";
 import { decodeToken, encodeToken } from "./tokens";
-import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
+import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 
 /** @internal */
 export const setStateCookie = (

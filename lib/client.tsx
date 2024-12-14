@@ -111,7 +111,7 @@ export const BungieSessionProvider = ({
   });
 
   const fetchAndUpdateSession = React.useCallback(
-    (refresh: boolean = false) => {
+    (refresh = false) => {
       if (isUpdatingSession.current) {
         return;
       }
@@ -143,7 +143,8 @@ export const BungieSessionProvider = ({
               });
             }
 
-            const session: NextBungieAuthSessionResponse = await res.json();
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            const session = await res.json();
 
             if (
               typeof session !== "object" ||
@@ -158,7 +159,7 @@ export const BungieSessionProvider = ({
             setSession((prev) =>
               deriveStateFromServer({
                 prevSession: prev,
-                session,
+                session: session as NextBungieAuthSessionResponse,
               })
             );
           } catch (err) {
@@ -220,7 +221,7 @@ export const BungieSessionProvider = ({
           error: undefined,
         });
       })
-      .catch((err) => {
+      .catch((err: Error) => {
         const errType = isNetworkError(err) ? "network" : "client";
         onError?.(err, errType);
         setSession((prev) =>
@@ -246,7 +247,7 @@ export const BungieSessionProvider = ({
           return 0;
         case "authorized":
           return Math.max(
-            0,
+            session.isError ? 60_000 : 0,
             new Date(session.data.accessTokenExpiresAt).getTime() -
               timeBeforeRefresh -
               Date.now()
@@ -300,6 +301,10 @@ export const BungieSessionProvider = ({
 
     const handleOnlineChange = () => {
       setIsOnline(navigator.onLine);
+
+      if (navigator.onLine) {
+        fetchAndUpdateSession(true);
+      }
     };
 
     window.addEventListener("visibilitychange", handleVisibilityChange);
@@ -420,6 +425,17 @@ function deriveLoadingState({
 }: {
   previous: BungieSessionState;
 }): BungieSessionState {
+  if (previous.status === "authorized" && previous.isError) {
+    return {
+      status: "unavailable",
+      isPending: false,
+      isFetching: false,
+      isError: true,
+      data: previous.data,
+      error: previous.error,
+    };
+  }
+
   switch (previous.status) {
     case "pending":
       return {

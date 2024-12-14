@@ -22,7 +22,7 @@ import {
   setStateCookie,
 } from "./cookies";
 import { cookies } from "next/headers";
-import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
+import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 
 export const DefaultBungieAuthConfig: Omit<
   NextBungieAuthConfig,
@@ -173,7 +173,7 @@ export const createNextBungieAuth = (
 
     sessionGET: async () => {
       const cookieJar = await cookies();
-      const { session, message } = await getSession(cookieJar, defaultedConfig);
+      const { session, message } = getSession(cookieJar, defaultedConfig);
 
       defaultedConfig.logRequest("session", true, message);
       return buildNextResponse(session, 200);
@@ -260,7 +260,7 @@ export const createNextBungieAuth = (
           defaultedConfig
         );
       },
-      updateServerSession: async (
+      updateServerSession: (
         tokens: BungieTokenResponse,
         issuedAt: Date,
         cookies

@@ -1,14 +1,14 @@
 import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
-import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
+import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 import type { NextRequest, NextResponse } from "next/server";
 
-export type NextBungieAuth = {
+export interface NextBungieAuth {
   /**
    * The single handler for Bungie OAuth. Wraps the individual handlers.
    */
   catchAllHandler: {
-    POST: (request: NextRequest) => Promise<NextResponse | never>;
-    GET: (request: NextRequest) => Promise<NextResponse | never>;
+    POST: (request: NextRequest) => Promise<NextResponse>;
+    GET: (request: NextRequest) => Promise<NextResponse>;
   };
   /**
    * The Next.js API routes for Bungie OAuth for my fain grained control.
@@ -18,7 +18,7 @@ export type NextBungieAuth = {
     /**
      * Redirects the user to the Bungie OAuth page.
      */
-    authorizeGET: (request: NextRequest) => Promise<NextResponse | never>;
+    authorizeGET: (request: NextRequest) => Promise<NextResponse>;
     /**
      * Deauthorizes the user's Bungie OAuth session.
      */
@@ -65,7 +65,7 @@ export type NextBungieAuth = {
       tokens: BungieTokenResponse,
       iat: Date,
       cookies: ReadonlyRequestCookies
-    ) => Promise<void>;
+    ) => void;
     /**
      * Synchronously retrieves the current server session from the request cookies.
      * Does not refresh the session, so it may be expired.
@@ -82,7 +82,7 @@ export type NextBungieAuth = {
       message: string;
     }>;
   };
-};
+}
 
 export type NextBungieAuthConfigRequiredKeys =
   | "clientId"
@@ -92,7 +92,7 @@ export type NextBungieAuthConfigRequiredKeys =
 /**
  * Configuration options for NextBungieAuth.
  */
-export type NextBungieAuthConfig = {
+export interface NextBungieAuthConfig {
   /**
    * The client ID for Bungie OAuth.
    */
@@ -152,31 +152,31 @@ export type NextBungieAuthConfig = {
     success: boolean,
     message?: string
   ) => void;
-};
+}
 
-export type BungieTokenResponse = {
+export interface BungieTokenResponse {
   access_token: string;
   token_type: "Bearer";
   expires_in: number;
   refresh_token: string;
   refresh_expires_in: number;
   membership_id: string;
-};
+}
 
 /**
  * The data returned from the session API route.
  *
  * Dates are in seconds since epoch`.
  */
-export type NextBungieAuthSessionData = {
+export interface NextBungieAuthSessionData {
   bungieMembershipId: string;
   accessToken: string;
   accessTokenExpiresAt: string;
-};
+}
 
-export type NextBungieAuthSaleSessionData = {
+export interface NextBungieAuthSaleSessionData {
   bungieMembershipId: string;
-};
+}
 
 export type NextBungieAuthSessionResponse =
   | {
@@ -195,7 +195,7 @@ export type NextBungieAuthSessionResponse =
 /**
  * Options for the BungieSessionProvider.
  */
-export type BungieSessionProviderParams = {
+export interface BungieSessionProviderParams {
   children: React.ReactNode;
   initialSession?: NextBungieAuthSessionResponse;
   /**
@@ -239,7 +239,7 @@ export type BungieSessionProviderParams = {
    * A custom fetch function to use for the client-side session refresh.
    */
   fetchOverride?: typeof fetch;
-};
+}
 
 /**
  * Return type for the `useBungieSession` hook.

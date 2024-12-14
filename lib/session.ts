@@ -1,4 +1,4 @@
-import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
+import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 import { clearAllCookies, getAllCookies, setAllCookies } from "./cookies";
 import { BungieAuthorizationError } from "./error";
 import { getTokens } from "./tokens";
@@ -99,15 +99,15 @@ export const refreshSession = async (
   }
 };
 
-export const getSession = async (
+export const getSession = (
   cookies: ReadonlyRequestCookies,
   config: NextBungieAuthConfig
-): Promise<{
+): {
   session: NextBungieAuthSessionResponse & {
     status: "authorized" | "unauthorized" | "stale";
   };
   message: string;
-}> => {
+} => {
   const { bungieMembershipId, refreshToken, accessToken, accessExpires } =
     getAllCookies(cookies, config);
 
