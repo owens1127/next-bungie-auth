@@ -152,6 +152,17 @@ export interface NextBungieAuthConfig {
     success: boolean,
     message?: string
   ) => void;
+  /**
+   * Generates an error callback URL for the client when the authorization fails.
+   *
+   * @param callbackUrl The normal callback URL.
+   * @param errorType The type of error that occurred.
+   * @returns
+   */
+  generateErrorCallbackUrl: (
+    callbackUrl: string,
+    errorType: "state_mismatch" | "token_error"
+  ) => string;
 }
 
 export interface BungieTokenResponse {

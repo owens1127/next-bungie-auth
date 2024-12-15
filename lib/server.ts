@@ -53,6 +53,11 @@ export const DefaultBungieAuthConfig: Omit<
       success ? "✅" : "❌",
       message
     ),
+  generateErrorCallbackUrl: (callbackUrl, errorType) => {
+    const url = new URL(callbackUrl);
+    url.searchParams.set("error", errorType);
+    return url.toString();
+  },
 };
 
 export const createNextBungieAuth = (
@@ -123,7 +128,13 @@ export const createNextBungieAuth = (
           false,
           `State mismatch error. Expected ${urlState}, got ${cookieState}`
         );
-        redirect(callbackUrl);
+
+        redirect(
+          defaultedConfig.generateErrorCallbackUrl(
+            callbackUrl,
+            "state_mismatch"
+          )
+        );
       }
 
       let tokens: BungieTokenResponse;
@@ -147,7 +158,10 @@ export const createNextBungieAuth = (
         } else {
           defaultedConfig.logRequest("callback", false, "unknown error");
         }
-        redirect(callbackUrl);
+
+        redirect(
+          defaultedConfig.generateErrorCallbackUrl(callbackUrl, "token_error")
+        );
       }
 
       const now = new Date();
