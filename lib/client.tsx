@@ -43,13 +43,11 @@ export const useAuthorizedBungieSession = (): BungieSession & {
   status: "authorized";
 } => {
   const ctx = React.useContext(AuthorizedAuthContext);
-
   if (ctx === undefined) {
     throw new TypeError(
       "useAuthorizedBungieSession must be used within a BungieSessionSuspender"
     );
   }
-
   return ctx;
 };
 
@@ -347,11 +345,16 @@ export const BungieSessionProvider = ({
  * This allows you to use the `useAuthorizedBungieSession` hook which guarantees
  * the session is authorized in your components.
  *
- * If a onUnauthorized is provided and the session is unauthorized, function
+ * If a onUnauthorized is provided and the session is unauthorized, the function
  * will be called. Commonly used for redirects sign-in pages.
+ *
+ * If onUnavailable is provided and the session is unavailable, the function
+ * will be called. Commonly used for redirects to a maintenance page or to display
+ * a message to the user.
  */
 export const BungieSessionSuspender = ({
   onUnauthorized,
+  onUnavailable,
   fallback,
   children,
 }: {
@@ -359,6 +362,7 @@ export const BungieSessionSuspender = ({
   onUnauthorized?: (
     session: BungieSession & { status: "unauthorized" }
   ) => void;
+  onUnavailable?: (session: BungieSession & { status: "unavailable" }) => void;
   fallback: (
     state: BungieSession & {
       status: "unauthorized" | "unavailable" | "stale" | "pending";
@@ -368,6 +372,7 @@ export const BungieSessionSuspender = ({
   const router = useRouter();
   const session = React.useContext(AuthContext);
   const onUnauthorizedRef = React.useRef(onUnauthorized); // Store the callback in a ref to avoid effects when it changes
+  const onUnavailableRef = React.useRef(onUnavailable);
 
   if (session === undefined) {
     throw new TypeError(
@@ -378,6 +383,10 @@ export const BungieSessionSuspender = ({
   React.useEffect(() => {
     onUnauthorizedRef.current = onUnauthorized;
   }, [onUnauthorized]);
+
+  React.useEffect(() => {
+    onUnavailableRef.current = onUnavailable;
+  }, [onUnavailable]);
 
   React.useEffect(() => {
     if (session.status === "unauthorized" && onUnauthorizedRef.current) {
@@ -496,7 +505,8 @@ function deriveStateFromServer({
         isFetching: false,
         isError: false,
         data: session.data,
-      } as DecodedServerResponseSessionState;
+        error: undefined,
+      };
     case "unauthorized":
     case "expired":
       return {
@@ -528,7 +538,7 @@ function deriveStateFromServer({
         isError: true,
         data: session.data,
         error: "bungie-api-offline",
-      } as DecodedServerResponseSessionState;
+      };
   }
 }
 

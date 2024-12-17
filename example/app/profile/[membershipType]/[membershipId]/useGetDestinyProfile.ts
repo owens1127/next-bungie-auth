@@ -1,8 +1,7 @@
-import { getMembershipDataForCurrentUser } from "bungie-net-core/endpoints/User";
 import { useHttpClient } from "../../useHttpClient";
 import { useCallback } from "react";
 import { getProfile } from "bungie-net-core/endpoints/Destiny2";
-import {
+import type {
   BungieMembershipType,
   DestinyComponentType,
 } from "bungie-net-core/models";

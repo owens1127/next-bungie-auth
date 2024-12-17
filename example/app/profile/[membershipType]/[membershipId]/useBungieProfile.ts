@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuthorizedBungieSession } from "next-bungie-auth/client";
 import { useGetDestinyProfile } from "./useGetDestinyProfile";
-import { BungieMembershipType } from "bungie-net-core/models";
+import type { BungieMembershipType } from "bungie-net-core/models";
 
 export const useDestinyProfile = (
   destinyMembershipId: string,

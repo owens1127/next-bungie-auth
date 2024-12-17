@@ -1,5 +1,6 @@
 {
   "private": true,
+  "type": "module",
   "scripts": {
     "clean": "tsc --build tsconfig.json --clean",
     "compile": "tsc --build tsconfig.json",

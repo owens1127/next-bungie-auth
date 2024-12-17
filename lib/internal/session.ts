@@ -5,8 +5,9 @@ import { getTokens } from "./tokens";
 import type {
   NextBungieAuthConfig,
   NextBungieAuthSessionResponse,
-} from "./types";
+} from "../types";
 
+/** @internal */
 export const refreshSession = async (
   cookies: ReadonlyRequestCookies,
   config: NextBungieAuthConfig
@@ -99,6 +100,7 @@ export const refreshSession = async (
   }
 };
 
+/** @internal */
 export const getSession = (
   cookies: ReadonlyRequestCookies,
   config: NextBungieAuthConfig
@@ -135,7 +137,7 @@ export const getSession = (
           accessTokenExpiresAt: accessExpires.toISOString(),
         },
       },
-      message: `Token is still valid for ${Math.floor((accessExpires.getTime() - Date.now()) / 60000)} minutes`,
+      message: `Access token is still valid for ${Math.floor((accessExpires.getTime() - Date.now()) / 60000)} minutes`,
     };
   } else {
     return {
@@ -145,7 +147,7 @@ export const getSession = (
           bungieMembershipId,
         },
       },
-      message: "Token is stale",
+      message: "Access token is expired",
     };
   }
 };

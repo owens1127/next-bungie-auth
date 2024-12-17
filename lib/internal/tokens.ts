@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 import { BungieAuthorizationError } from "./error";
-import type { BungieTokenResponse, NextBungieAuthConfig } from "./types";
+import type { BungieTokenResponse, NextBungieAuthConfig } from "../types";
 
 const responseJsonKeys = [
   "access_token",

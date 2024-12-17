@@ -2,8 +2,9 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BungieSessionProvider } from "next-bungie-auth/client";
-import { ReactNode, useState } from "react";
-import { NextBungieAuthSessionResponse } from "next-bungie-auth/types";
+import type { ReactNode} from "react";
+import { useState } from "react";
+import type { NextBungieAuthSessionResponse } from "next-bungie-auth/types";
 
 /**
  * Provides a client component for managing the Bungie session.

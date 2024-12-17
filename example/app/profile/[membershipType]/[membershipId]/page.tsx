@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Shield, Swords, BarChart3 } from "lucide-react";
+import { User, Shield, Swords } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -21,8 +21,10 @@ export default function Page() {
     membershipId: string;
     membershipType: string;
   }>();
-  const { data, isError, error, isPending, status, refetch } =
-    useDestinyProfile(params.membershipId, Number(params.membershipType));
+  const { data, isError, error, isPending, refetch } = useDestinyProfile(
+    params.membershipId,
+    Number(params.membershipType)
+  );
 
   if (isPending) {
     return (

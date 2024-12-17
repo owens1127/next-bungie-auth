@@ -145,24 +145,50 @@ export interface NextBungieAuthConfig {
     value: string;
   }) => Promise<Response>;
   /**
-   * Callback function to log events as you wish.
-   */
-  logRequest: (
-    path: "authorize" | "deauthorize" | "callback" | "session" | "refresh",
-    success: boolean,
-    message?: string
-  ) => void;
-  /**
-   * Generates an error callback URL for the client when the authorization fails.
+   * During the authorization request, this function generates the callback URL cookie
+   * from the request object.
    *
-   * @param callbackUrl The normal callback URL.
+   * Defaults to a function that returns the `callback_url` query parameter
+   * or the referrer header if the query parameter is not present.
+   *
+   * @param request The authorize request object.
+   * @returns The value for the callback URL cookie, or null if no callback URL is present.
+   */
+  generateCallbackUrlCookie: (request: NextRequest) => string | null;
+  /**
+   * After a successful authorization, this function generates the base callback URL from
+   * the request object and the callback URL cookie.
+   *
+   * @param request The callback request object coming from bungie.net.
+   * @param callbackUrlCookie The value of the callback URL cookie.
+   * @returns The url to redirect the user to after authorization.
+   */
+  generateCallbackUrl: (
+    request: NextRequest,
+    callbackUrlCookie: string | null
+  ) => string;
+  /**
+   * After an error occurs during the authorization process, this function generates the
+   * callback URL with the error type.
+   *
+   * @param request The request object coming from bungie.net.
    * @param errorType The type of error that occurred.
+   * @param callbackUrlCookie The value of the callback URL cookie.
    * @returns
    */
   generateErrorCallbackUrl: (
-    callbackUrl: string,
-    errorType: "state_mismatch" | "token_error"
+    request: NextRequest,
+    errorType: "state_mismatch" | "token_error",
+    callbackUrlCookie: string | null
   ) => string;
+  /**
+   * Callback which takes in the result of the request and logs it.
+   */
+  logRequest: (
+    path: "authorize" | "deauthorize" | "callback" | "session" | "refresh",
+    status: "success" | "error" | "info" | "warn",
+    message: string
+  ) => void;
 }
 
 export interface BungieTokenResponse {

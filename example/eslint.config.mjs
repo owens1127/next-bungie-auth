@@ -7,7 +7,7 @@ import hooksPlugin from "eslint-plugin-react-hooks";
 export default tseslint.config(
   {
     // Globally ignored files
-    ignores: ["**/*.config.*"],
+    ignores: ["**/*.config.*", "node_modules", ".next"],
   },
   {
     files: ["**/*.ts", "**/*.tsx"],
@@ -16,7 +16,6 @@ export default tseslint.config(
         React: "writable",
       },
     },
-    files: ["**/*.js", "**/*.ts", "**/*.tsx"],
     plugins: {
       import: importPlugin,
       react: reactPlugin,

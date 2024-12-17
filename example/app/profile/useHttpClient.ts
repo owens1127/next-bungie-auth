@@ -1,4 +1,8 @@
-import { BungieClientProtocol } from "bungie-net-core";
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import type { BungieClientProtocol } from "bungie-net-core";
 import { useMemo } from "react";
 
 export const useHttpClient = (accessToken: string) => {
@@ -43,7 +47,7 @@ export const useHttpClient = (accessToken: string) => {
         } else {
           const body = await response.text();
           const htmlRegex = /<title>(.*?)<\/title>/;
-          const match = body.match(htmlRegex);
+          const match = htmlRegex.exec(body);
           if (match) {
             throw new Error(match[1]);
           } else {

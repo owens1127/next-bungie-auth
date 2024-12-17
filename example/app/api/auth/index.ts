@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import "server-only";
 import { createNextBungieAuth } from "next-bungie-auth/server";
 
