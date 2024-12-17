@@ -13,5 +13,5 @@ certificates
 
 # Build
 dist/*
-!dist/LICENSE.md
+!dist/*.md
 !dist/package.json

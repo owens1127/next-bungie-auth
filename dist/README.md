@@ -9,7 +9,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 
-- Next.js 13.5 or later
+- Next.js 15.0 or later
 - Registered [Bungie developer application](https://www.bungie.net/en/Application)
   1.  Select **Confidential** OAuth Client Type
   2.  Set your redirect url to `https://localhost:3000/your-custom-path`
