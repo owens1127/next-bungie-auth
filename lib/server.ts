@@ -70,16 +70,16 @@ export const createNextBungieAuth = (
         issuedAt: Date,
         cookies
       ) => {
-        const sessionExpires = new Date(
-          issuedAt.getTime() + tokens.refresh_expires_in * 1000
-        );
-        const accessExpires = new Date(
-          issuedAt.getTime() + tokens.expires_in * 1000
-        );
+        const offset = Date.now() - issuedAt.getTime();
+        const sessionAge = tokens.refresh_expires_in * 1000 - offset;
+        const accessAge = tokens.expires_in * 1000 - offset;
+        const accessExpires = new Date(Date.now() + accessAge);
+
         setAllCookies(
           {
             tokens,
-            sessionExpires,
+            sessionAge,
+            accessAge,
             accessExpires,
           },
           cookies,

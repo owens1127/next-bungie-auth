@@ -38,17 +38,15 @@ export const refreshSession = async (
       config
     );
 
-    const now = new Date();
-    now.setMilliseconds(0);
-    const sessionExpires = new Date(
-      now.getTime() + tokens.refresh_expires_in * 1000
-    );
-    const accessExpires = new Date(now.getTime() + tokens.expires_in * 1000);
+    const sessionAge = tokens.refresh_expires_in * 1000;
+    const accessAge = tokens.expires_in * 1000;
+    const accessExpires = new Date(Date.now() + accessAge);
 
     setAllCookies(
       {
         accessExpires,
-        sessionExpires,
+        accessAge,
+        sessionAge,
         tokens,
       },
       cookies,

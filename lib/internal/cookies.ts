@@ -88,11 +88,13 @@ export const getAllCookies = (
 export const setAllCookies = (
   {
     tokens,
+    sessionAge,
+    accessAge,
     accessExpires,
-    sessionExpires,
   }: {
     tokens: BungieTokenResponse;
-    sessionExpires: Date;
+    sessionAge: number;
+    accessAge: number;
     accessExpires: Date;
   },
   cookieJar: ReadonlyRequestCookies,
@@ -100,14 +102,15 @@ export const setAllCookies = (
 ) => {
   cookieJar.set(`${config.baseCookieName}.membershipid`, tokens.membership_id, {
     ...config.cookieOptions,
-    expires: sessionExpires,
+    maxAge: sessionAge,
   });
+
   cookieJar.set(
     `${config.baseCookieName}.refresh`,
     encodeToken(tokens.refresh_token, config),
     {
       ...config.cookieOptions,
-      expires: sessionExpires,
+      maxAge: sessionAge,
     }
   );
 
@@ -116,7 +119,7 @@ export const setAllCookies = (
     encodeToken(tokens.access_token, config),
     {
       ...config.cookieOptions,
-      expires: accessExpires,
+      maxAge: accessAge,
     }
   );
   cookieJar.set(
@@ -124,7 +127,7 @@ export const setAllCookies = (
     accessExpires.toISOString(),
     {
       ...config.cookieOptions,
-      expires: accessExpires,
+      maxAge: accessAge,
     }
   );
 };
