@@ -269,6 +269,11 @@ export interface BungieSessionProviderParams {
    */
   timeBeforeRefresh?: number;
   /**
+   * The min interval in milliseconds between automatic session refreshes.
+   * @default 15_000 // (15 seconds)
+   */
+  refreshRateLimit?: number;
+  /**
    * Handler errors that occur during the client-side session refresh.
    */
   onError?: (error: Error, type: "client" | "server" | "network") => void;

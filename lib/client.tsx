@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import type {
   BungieSessionProviderParams,
   NextBungieAuthSessionResponse,
   BungieSession,
   BungieSessionState,
 } from "./types";
-import { useRouter } from "next/navigation";
 
 // BEGIN STATE CONTEXTS
 
@@ -83,12 +83,14 @@ export const BungieSessionProvider = ({
   refreshInBackground = true,
   fetchOverride: customFetch = fetch,
   timeBeforeRefresh = 30000,
+  refreshRateLimit = 15000,
   onError,
 }: BungieSessionProviderParams) => {
   const [isOnline, setIsOnline] = React.useState(true);
   const [isVisible, setIsVisible] = React.useState(true);
   const isUpdatingSession = React.useRef<boolean>(false);
   const isDeauthorizing = React.useRef<boolean>(false);
+  const [lastSuccessfulRefresh, setLastSuccessfulRefresh] = React.useState(0);
 
   const [session, setSession] = React.useState<BungieSessionState>(() => {
     if (initialSession === undefined) {
@@ -152,6 +154,10 @@ export const BungieSessionProvider = ({
               throw new Error("Invalid response body", {
                 cause: session,
               });
+            }
+
+            if (refresh) {
+              setLastSuccessfulRefresh(Date.now());
             }
 
             setSession((prev) =>
@@ -240,24 +246,31 @@ export const BungieSessionProvider = ({
    */
   const calculateMsToNextRefresh = React.useCallback(
     (session: BungieSessionState): number | false => {
+      const minWaitForRefresh = lastSuccessfulRefresh
+        ? Math.max(
+            0,
+            refreshRateLimit - Math.max(0, Date.now() - lastSuccessfulRefresh)
+          )
+        : 0;
+
       switch (session.status) {
         case "stale":
-          return 0;
+          return minWaitForRefresh;
         case "authorized":
           return Math.max(
-            session.isError ? 60_000 : 0,
+            session.isError ? 60_000 : minWaitForRefresh,
             new Date(session.data.accessTokenExpiresAt).getTime() -
               timeBeforeRefresh -
               Date.now()
           );
         case "unavailable":
-          return 5 * 60000;
+          return 5 * 60_000;
         case "pending":
         case "unauthorized":
           return false;
       }
     },
-    [timeBeforeRefresh]
+    [timeBeforeRefresh, lastSuccessfulRefresh]
   );
 
   React.useEffect(() => {
@@ -314,7 +327,7 @@ export const BungieSessionProvider = ({
       window.removeEventListener("online", handleOnlineChange);
       window.removeEventListener("offline", handleOnlineChange);
     };
-  }, []);
+  }, [fetchAndUpdateSession]);
 
   // These methods are memoized to prevent unnecessary re-renders but also act as wrappers
   // asto not expose them to the consumer
