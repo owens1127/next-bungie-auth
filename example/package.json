@@ -1,4 +1,5 @@
 {
+  "private": true,
   "name": "next-bungie-auth-example",
   "scripts": {
     "dev": "next dev --experimental-https",

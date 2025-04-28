@@ -7,7 +7,7 @@ export const useDestinyProfile = (
   destinyMembershipId: string,
   membershipType: BungieMembershipType
 ) => {
-  const session = useAuthorizedBungieSession();
+  const { session } = useAuthorizedBungieSession();
   const getDestinyProfile = useGetDestinyProfile(
     {
       destinyMembershipId: destinyMembershipId,

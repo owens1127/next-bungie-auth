@@ -11,20 +11,16 @@ import type {
 export const refreshSession = async (
   cookies: ReadonlyRequestCookies,
   config: NextBungieAuthConfig
-): Promise<{
-  session: NextBungieAuthSessionResponse & {
-    status: "authorized" | "expired" | "unauthorized" | "error" | "disabled";
-  };
-  message: string;
-}> => {
-  const { bungieMembershipId, refreshToken } = getAllCookies(cookies, config);
+): Promise<NextBungieAuthSessionResponse> => {
+  const { bungieMembershipId, refreshToken } = await getAllCookies(
+    cookies,
+    config
+  );
 
   if (!bungieMembershipId || !refreshToken) {
     return {
-      session: {
-        status: "unauthorized",
-        data: null,
-      },
+      status: "unauthorized",
+      data: null,
       message: "No session found",
     };
   }
@@ -42,7 +38,7 @@ export const refreshSession = async (
     const accessAge = tokens.expires_in * 1000;
     const accessExpires = new Date(Date.now() + accessAge);
 
-    setAllCookies(
+    await setAllCookies(
       {
         accessExpires,
         accessAge,
@@ -54,98 +50,46 @@ export const refreshSession = async (
     );
 
     return {
-      session: {
-        status: "authorized",
-        data: {
-          bungieMembershipId: tokens.membership_id,
-          accessToken: tokens.access_token,
-          accessTokenExpiresAt: accessExpires.toISOString(),
-        },
-      },
+      status: "authorized",
+      data: await config.createSession({
+        bungieMembershipId: tokens.membership_id,
+        accessToken: tokens.access_token,
+        accessTokenExpiresIn: accessAge * 1000,
+      }),
       message: "Session refreshed",
     };
   } catch (err) {
     if (!(err instanceof BungieAuthorizationError)) {
       return {
-        session: {
-          status: "error",
-          data: null,
-        },
+        status: "error",
+        data: null,
         message: "Unknown error",
       };
     }
 
     if (err.error_description === "SystemDisabled") {
       return {
-        session: {
-          status: "disabled",
-          data: {
-            bungieMembershipId,
-          },
-        },
+        status: "disabled",
+        data: await config.createStaleSession({
+          bungieMembershipId,
+        }),
+        message: `${err.error}: ${err.error_description}`,
+      };
+    } else if (err.error === "server_error") {
+      return {
+        status: "stale",
+        data: await config.createStaleSession({
+          bungieMembershipId,
+        }),
         message: `${err.error}: ${err.error_description}`,
       };
     } else {
       clearAllCookies(cookies, config);
       return {
-        session: {
-          status: "expired",
-          data: null,
-        },
+        status: "expired",
+        data: null,
         message: `${err.error}: ${err.error_description}`,
       };
     }
-  }
-};
-
-/** @internal */
-export const getSession = (
-  cookies: ReadonlyRequestCookies,
-  config: NextBungieAuthConfig
-): {
-  session: NextBungieAuthSessionResponse & {
-    status: "authorized" | "unauthorized" | "stale";
-  };
-  message: string;
-} => {
-  const { bungieMembershipId, refreshToken, accessToken, accessExpires } =
-    getAllCookies(cookies, config);
-
-  if (!bungieMembershipId || !refreshToken) {
-    return {
-      session: {
-        status: "unauthorized",
-        data: null,
-      },
-      message: "No session found",
-    };
-  }
-
-  if (
-    accessToken &&
-    accessExpires.getTime() - Date.now() / 1000 >
-      config.sessionRefreshGracePeriod
-  ) {
-    return {
-      session: {
-        status: "authorized",
-        data: {
-          bungieMembershipId,
-          accessToken: accessToken,
-          accessTokenExpiresAt: accessExpires.toISOString(),
-        },
-      },
-      message: `Access token is still valid for ${Math.floor((accessExpires.getTime() - Date.now()) / 60000)} minutes`,
-    };
-  } else {
-    return {
-      session: {
-        status: "stale",
-        data: {
-          bungieMembershipId,
-        },
-      },
-      message: "Access token is expired",
-    };
   }
 };

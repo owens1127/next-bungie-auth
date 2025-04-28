@@ -30,7 +30,7 @@ export const getTokens = async (
       clientSecret: config.clientSecret,
       grantType,
       grantKey: grantType === "authorization_code" ? "code" : "refresh_token",
-      value,
+      grantValue: value,
     })
     .then(async (res) => {
       if (res.ok) {
@@ -65,39 +65,4 @@ export const getTokens = async (
     });
 
   return data;
-};
-
-/** @internal */
-export const encodeToken = (data: string, config: NextBungieAuthConfig) => {
-  return btoa(
-    data
-      .split("")
-      .map((c, i) =>
-        String.fromCharCode(
-          c.charCodeAt(0) +
-            config.clientSecret.charCodeAt(i % config.clientSecret.length)
-        )
-      )
-      .join("")
-  );
-};
-
-/** @internal */
-export const decodeToken = (
-  encodedStr: string | undefined,
-  config: NextBungieAuthConfig
-) => {
-  if (!encodedStr) {
-    return null;
-  }
-
-  return atob(encodedStr)
-    .split("")
-    .map((c, i) =>
-      String.fromCharCode(
-        c.charCodeAt(0) -
-          config.clientSecret.charCodeAt(i % config.clientSecret.length)
-      )
-    )
-    .join("");
 };

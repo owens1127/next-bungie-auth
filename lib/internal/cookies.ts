@@ -1,5 +1,4 @@
 import type { BungieTokenResponse, NextBungieAuthConfig } from "../types";
-import { decodeToken, encodeToken } from "./tokens";
 import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 
 /** @internal */
@@ -59,7 +58,7 @@ export const clearCallbackCookie = (
 };
 
 /** @internal */
-export const getAllCookies = (
+export const getAllCookies = async (
   cookieJar: ReadonlyRequestCookies,
   config: NextBungieAuthConfig
 ) => {
@@ -79,13 +78,27 @@ export const getAllCookies = (
   return {
     accessExpires,
     bungieMembershipId,
-    accessToken: decodeToken(encodedAccessToken, config),
-    refreshToken: decodeToken(encodedRefreshToken, config),
+    accessToken: encodedAccessToken
+      ? config.encodeTokens
+        ? await config.encodeTokens.decoder(
+            encodedAccessToken,
+            config.clientSecret
+          )
+        : encodedAccessToken
+      : null,
+    refreshToken: encodedRefreshToken
+      ? config.encodeTokens
+        ? await config.encodeTokens.decoder(
+            encodedRefreshToken,
+            config.clientSecret
+          )
+        : encodedRefreshToken
+      : null,
   };
 };
 
 /** @internal */
-export const setAllCookies = (
+export const setAllCookies = async (
   {
     tokens,
     sessionAge,
@@ -107,7 +120,12 @@ export const setAllCookies = (
 
   cookieJar.set(
     `${config.baseCookieName}.refresh`,
-    encodeToken(tokens.refresh_token, config),
+    config.encodeTokens
+      ? await config.encodeTokens.encoder(
+          tokens.refresh_token,
+          config.clientSecret
+        )
+      : tokens.refresh_token,
     {
       ...config.cookieOptions,
       maxAge: sessionAge,
@@ -116,7 +134,12 @@ export const setAllCookies = (
 
   cookieJar.set(
     `${config.baseCookieName}.access`,
-    encodeToken(tokens.access_token, config),
+    config.encodeTokens
+      ? await config.encodeTokens.encoder(
+          tokens.access_token,
+          config.clientSecret
+        )
+      : tokens.access_token,
     {
       ...config.cookieOptions,
       maxAge: accessAge,

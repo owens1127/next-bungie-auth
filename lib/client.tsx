@@ -5,16 +5,22 @@ import { useRouter } from "next/navigation";
 import type {
   BungieSessionProviderParams,
   NextBungieAuthSessionResponse,
-  BungieSession,
   BungieSessionState,
+  UnavailableBungieSessionState,
+  UnauthorizedBungieSessionState,
+  BungieSessionContext,
+  AuthorizedBungieSessionContext,
+  AuthorizedBungieSessionState,
 } from "./types";
 
 // BEGIN STATE CONTEXTS
 
-const AuthContext = React.createContext<BungieSession | undefined>(undefined);
+const AuthContext = React.createContext<BungieSessionContext | undefined>(
+  undefined
+);
 
 const AuthorizedAuthContext = React.createContext<
-  (BungieSession & { status: "authorized" }) | undefined
+  AuthorizedBungieSessionContext | undefined
 >(undefined);
 
 // END STATE CONTEXTS
@@ -22,11 +28,11 @@ const AuthorizedAuthContext = React.createContext<
 // BEGIN EXPORTED HOOKS
 
 /**
- * Custom hook that returns the Next Bungie Auth Session.
+ * Provides the Bungie to a client component.
  * @returns The Bungie session context.
  * @throws If used outside of a BungieSessionProvider.
  */
-export const useBungieSession = (): BungieSession => {
+export const useBungieSession = () => {
   const ctx = React.useContext(AuthContext);
   if (ctx === undefined) {
     throw new Error(
@@ -37,11 +43,9 @@ export const useBungieSession = (): BungieSession => {
 };
 
 /**
- * Custom hook that returns the Next Bungie Auth Session.
+ * Provides an authorized Bungie session to a client component.
  */
-export const useAuthorizedBungieSession = (): BungieSession & {
-  status: "authorized";
-} => {
+export const useAuthorizedBungieSession = () => {
   const ctx = React.useContext(AuthorizedAuthContext);
   if (ctx === undefined) {
     throw new TypeError(
@@ -76,12 +80,11 @@ export const useAuthorizedBungieSession = (): BungieSession & {
 export const BungieSessionProvider = ({
   children,
   initialSession,
-  sessionPath = "/api/auth/session",
   deauthorizePath = "/api/auth/deauthorize",
-  refreshPath = "/api/auth/refresh",
+  sessionPath = "/api/auth/session",
   enableAutomaticRefresh = true,
   refreshInBackground = true,
-  fetchOverride: customFetch = fetch,
+  fetchOverride = fetch,
   timeBeforeRefresh = 30000,
   refreshRateLimit = 15000,
   onError,
@@ -90,155 +93,120 @@ export const BungieSessionProvider = ({
   const [isVisible, setIsVisible] = React.useState(true);
   const isUpdatingSession = React.useRef<boolean>(false);
   const isDeauthorizing = React.useRef<boolean>(false);
-  const [lastSuccessfulRefresh, setLastSuccessfulRefresh] = React.useState(0);
+  const sessionUpdatedAt = React.useRef<number>(0);
 
   const [session, setSession] = React.useState<BungieSessionState>(() => {
     if (initialSession === undefined) {
       return {
         status: "pending",
-        isPending: true,
         isFetching: true,
-        isError: false,
         data: null,
-        error: undefined,
+        error: null,
       };
     } else {
-      return deriveStateFromServer({
-        prevSession: null,
-        session: initialSession,
+      return deriveResponseState({
+        previousState: null,
+        incomingSession: initialSession,
       });
     }
   });
 
-  const fetchAndUpdateSession = React.useCallback(
-    (refresh = false) => {
-      if (isUpdatingSession.current) {
-        return;
-      }
+  const fetchAndUpdateSession = React.useCallback(async () => {
+    if (isUpdatingSession.current) {
+      return;
+    }
 
-      isUpdatingSession.current = true;
-      setSession((prev) => deriveLoadingState({ previous: prev }));
+    isUpdatingSession.current = true;
+    setSession(deriveLoadingState);
 
-      customFetch(refresh ? refreshPath : sessionPath, {
-        method: refresh ? "POST" : "GET",
-      })
-        .then(async (res) => {
-          try {
-            if (res.status === 404) {
-              throw new Error(
-                `${refresh ? "Refresh" : "Session"} route not found`,
-                {
-                  cause: res,
-                }
-              );
-            }
-
-            if (
-              !res.headers.get("content-type")?.includes("application/json")
-            ) {
-              throw new Error("Invalid response content type", {
-                cause: {
-                  contentType: res.headers.get("content-type"),
-                },
-              });
-            }
-
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            const session = await res.json();
-
-            if (
-              typeof session !== "object" ||
-              !("status" in session) ||
-              !("data" in session)
-            ) {
-              throw new Error("Invalid response body", {
-                cause: session,
-              });
-            }
-
-            if (refresh) {
-              setLastSuccessfulRefresh(Date.now());
-            }
-
-            setSession((prev) =>
-              deriveStateFromServer({
-                prevSession: prev,
-                session: session as NextBungieAuthSessionResponse,
-              })
-            );
-          } catch (err) {
-            // Handle server errors
-            if (res.status >= 500) {
-              setSession((prev) =>
-                deriveErrorState({
-                  previous: prev,
-                  error: "server",
-                })
-              );
-              onError?.(err as Error, "server");
-            } else {
-              // Re-throw errors that are not server errors
-              throw err;
-            }
+    await fetchOverride(sessionPath, {
+      method: "GET",
+    })
+      .then(async (res) => {
+        try {
+          if (res.status === 404) {
+            throw new Error("Refresh route not found", {
+              cause: res,
+            });
           }
-        })
-        .catch((err: Error) => {
-          // Handle network and client side errors
-          const errType = isNetworkError(err) ? "network" : "client";
+
+          if (!res.headers.get("content-type")?.includes("application/json")) {
+            throw new Error("Invalid response content type", {
+              cause: {
+                contentType: res.headers.get("content-type"),
+              },
+            });
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          const session = await res.json();
+
+          if (
+            typeof session !== "object" ||
+            !("status" in session) ||
+            !("data" in session)
+          ) {
+            throw new Error("Invalid response body", {
+              cause: session,
+            });
+          }
+
           setSession((prev) =>
-            deriveErrorState({
-              previous: prev,
-              error: errType,
+            deriveResponseState({
+              previousState: prev,
+              incomingSession: session as NextBungieAuthSessionResponse,
             })
           );
-          onError?.(err, errType);
-        })
-        .finally(() => {
-          isUpdatingSession.current = false;
-        });
-    },
-    [isUpdatingSession, customFetch, sessionPath, onError]
-  );
+        } catch (err) {
+          // Handle server errors
+          if (res.status >= 500) {
+            setSession((prev) => deriveErrorState(prev, "server"));
+            onError?.(err as Error, "server", "refresh-session");
+          } else {
+            // Re-throw errors that are not server errors
+            throw err;
+          }
+        }
+      })
+      .catch((err: Error) => {
+        // Handle network and client side errors
+        setSession((prev) => deriveErrorState(prev, "client"));
+        onError?.(err, "client", "refresh-session");
+      })
+      .finally(() => {
+        isUpdatingSession.current = false;
+        sessionUpdatedAt.current = Date.now();
+      });
+  }, [isUpdatingSession, fetchOverride, sessionPath, onError]);
 
-  const deauthorize = React.useCallback(() => {
+  const deauthorize = React.useCallback(async () => {
     if (isDeauthorizing.current) {
       return;
     }
 
     isDeauthorizing.current = true;
-    setSession((prev) =>
-      deriveLoadingState({
-        previous: prev,
-      })
-    );
+    setSession(deriveLoadingState);
 
-    customFetch(deauthorizePath, {
+    await fetchOverride(deauthorizePath, {
       method: "POST",
     })
       .then(() => {
         setSession({
           status: "unauthorized",
-          isPending: false,
           isFetching: false,
-          isError: false,
           data: null,
-          error: undefined,
+          error: null,
         });
       })
       .catch((err: Error) => {
-        const errType = isNetworkError(err) ? "network" : "client";
-        onError?.(err, errType);
-        setSession((prev) =>
-          deriveErrorState({
-            previous: prev,
-            error: errType,
-          })
-        );
+        onError?.(err, "client", "terminate-session");
+        setSession((prev) => deriveErrorState(prev, "client"));
       })
       .finally(() => {
         isDeauthorizing.current = false;
+        sessionUpdatedAt.current = Date.now();
       });
-  }, [deauthorizePath, customFetch, onError, fetchAndUpdateSession]);
+  }, [deauthorizePath, fetchOverride, onError, fetchAndUpdateSession]);
 
   /**
    * Calculates the time until the next session refresh.
@@ -246,37 +214,37 @@ export const BungieSessionProvider = ({
    */
   const calculateMsToNextRefresh = React.useCallback(
     (session: BungieSessionState): number | false => {
-      const minWaitForRefresh = lastSuccessfulRefresh
+      const rateLimitedDelay = sessionUpdatedAt.current
         ? Math.max(
             0,
-            refreshRateLimit - Math.max(0, Date.now() - lastSuccessfulRefresh)
+            refreshRateLimit -
+              Math.max(0, Date.now() - sessionUpdatedAt.current)
           )
         : 0;
 
       switch (session.status) {
-        case "stale":
-          return minWaitForRefresh;
         case "authorized":
           return Math.max(
-            session.isError ? 60_000 : minWaitForRefresh,
-            new Date(session.data.accessTokenExpiresAt).getTime() -
-              timeBeforeRefresh -
-              Date.now()
+            rateLimitedDelay,
+            sessionUpdatedAt.current +
+              session.data.accessTokenExpiresIn -
+              timeBeforeRefresh
           );
-        case "unavailable":
-          return 5 * 60_000;
         case "pending":
+        case "stale":
+          return rateLimitedDelay;
+        case "unavailable":
         case "unauthorized":
           return false;
       }
     },
-    [timeBeforeRefresh, lastSuccessfulRefresh]
+    [timeBeforeRefresh, sessionUpdatedAt]
   );
 
   React.useEffect(() => {
     if (session.status === "pending") {
       // Fetch the session if it is pending, the fetch will be skipped if the session is already being fetched
-      fetchAndUpdateSession(false);
+      void fetchAndUpdateSession();
       return;
     }
 
@@ -288,7 +256,7 @@ export const BungieSessionProvider = ({
       const timeoutTime = calculateMsToNextRefresh(session);
       if (timeoutTime !== false) {
         const timeout = setTimeout(
-          () => fetchAndUpdateSession(true),
+          () => void fetchAndUpdateSession(),
           timeoutTime
         );
         return () => clearTimeout(timeout);
@@ -314,7 +282,7 @@ export const BungieSessionProvider = ({
       setIsOnline(navigator.onLine);
 
       if (navigator.onLine) {
-        fetchAndUpdateSession(true);
+        void fetchAndUpdateSession();
       }
     };
 
@@ -329,21 +297,12 @@ export const BungieSessionProvider = ({
     };
   }, [fetchAndUpdateSession]);
 
-  // These methods are memoized to prevent unnecessary re-renders but also act as wrappers
-  // asto not expose them to the consumer
-
-  const refresh = React.useCallback(
-    () => fetchAndUpdateSession(true),
-    [fetchAndUpdateSession]
-  );
-  const kill = React.useCallback(() => deauthorize(), [deauthorize]);
-
   return (
     <AuthContext.Provider
       value={{
-        ...session,
-        refresh,
-        kill,
+        session,
+        refresh: fetchAndUpdateSession,
+        terminate: deauthorize,
       }}
     >
       {children}
@@ -372,22 +331,18 @@ export const BungieSessionSuspender = ({
   children,
 }: {
   children: React.ReactNode;
-  onUnauthorized?: (
-    session: BungieSession & { status: "unauthorized" }
-  ) => void;
-  onUnavailable?: (session: BungieSession & { status: "unavailable" }) => void;
+  onUnauthorized?: (state: UnauthorizedBungieSessionState) => void;
+  onUnavailable?: (state: UnavailableBungieSessionState) => void;
   fallback: (
-    state: BungieSession & {
-      status: "unauthorized" | "unavailable" | "stale" | "pending";
-    }
+    state: Exclude<BungieSessionState, AuthorizedBungieSessionState>
   ) => React.ReactNode;
 }) => {
   const router = useRouter();
-  const session = React.useContext(AuthContext);
-  const onUnauthorizedRef = React.useRef(onUnauthorized); // Store the callback in a ref to avoid effects when it changes
+  const sessionCtx = React.useContext(AuthContext);
+  const onUnauthorizedRef = React.useRef(onUnauthorized);
   const onUnavailableRef = React.useRef(onUnavailable);
 
-  if (session === undefined) {
+  if (sessionCtx === undefined) {
     throw new TypeError(
       "BungieSessionSuspender must be a child of a BungieSessionProvider"
     );
@@ -402,17 +357,22 @@ export const BungieSessionSuspender = ({
   }, [onUnavailable]);
 
   React.useEffect(() => {
-    if (session.status === "unauthorized" && onUnauthorizedRef.current) {
-      onUnauthorizedRef.current(session);
+    if (
+      sessionCtx.session.status === "unauthorized" &&
+      onUnauthorizedRef.current
+    ) {
+      onUnauthorizedRef.current(sessionCtx.session);
     }
-  }, [router, session]);
+  }, [router, sessionCtx.session]);
 
-  if (session.status !== "authorized") {
-    return fallback(session);
+  if (sessionCtx.session.status !== "authorized") {
+    return fallback(sessionCtx.session);
   }
 
   return (
-    <AuthorizedAuthContext.Provider value={session}>
+    <AuthorizedAuthContext.Provider
+      value={sessionCtx as AuthorizedBungieSessionContext}
+    >
       {children}
     </AuthorizedAuthContext.Provider>
   );
@@ -422,139 +382,87 @@ export const BungieSessionSuspender = ({
 
 // BEGIN STATE DERIVATION FUNCTIONS
 
-function deriveErrorState({
-  previous,
-  error,
+function deriveResponseState({
+  previousState: prevState,
+  incomingSession,
 }: {
-  previous: BungieSessionState;
-  error: "client" | "server" | "network";
+  previousState: BungieSessionState | null;
+  incomingSession: NextBungieAuthSessionResponse;
 }): BungieSessionState {
-  return {
-    status:
-      previous.isPending || previous.status === "unavailable"
-        ? "unauthorized"
-        : previous.status,
-    isPending: false,
-    isFetching: false,
-    isError: true,
-    data: previous.data,
-    error,
-  } as BungieSessionState;
-}
-
-function deriveLoadingState({
-  previous,
-}: {
-  previous: BungieSessionState;
-}): BungieSessionState {
-  if (previous.status === "authorized" && previous.isError) {
-    return {
-      status: "unavailable",
-      isPending: false,
-      isFetching: false,
-      isError: true,
-      data: previous.data,
-      error: previous.error,
-    };
-  }
-
-  switch (previous.status) {
-    case "pending":
-      return {
-        status: "pending",
-        isPending: true,
-        isFetching: true,
-        isError: false,
-        data: null,
-        error: undefined,
-      };
-    case "stale":
-      return {
-        status: previous.status,
-        isPending: true,
-        isFetching: true,
-        isError: previous.isError,
-        data: previous.data,
-        error: previous.error,
-      };
-    case "authorized":
-    case "unauthorized":
-    case "unavailable":
-      return {
-        status: previous.status,
-        isPending: false,
-        isFetching: true,
-        isError: previous.isError,
-        data: previous.data,
-        error: previous.error,
-      } as BungieSessionState;
-  }
-}
-
-type DecodedServerResponseSessionState = BungieSessionState & {
-  error: undefined | "server" | "bungie-api-offline";
-};
-function deriveStateFromServer({
-  prevSession,
-  session,
-}: {
-  prevSession: BungieSessionState | null;
-  session: NextBungieAuthSessionResponse;
-}): DecodedServerResponseSessionState {
-  switch (session.status) {
+  switch (incomingSession.status) {
     case "authorized":
       return {
         status: "authorized",
-        isPending: false,
         isFetching: false,
-        isError: false,
-        data: session.data,
-        error: undefined,
+        data: incomingSession.data,
+        error: null,
       };
     case "stale":
       return {
-        status: "stale",
-        isPending: true,
+        status: !prevState ? "pending" : "stale",
         isFetching: false,
-        isError: false,
-        data: session.data,
-        error: undefined,
+        data: incomingSession.data,
+        error: null,
       };
     case "unauthorized":
     case "expired":
       return {
         status: "unauthorized",
-        isPending: false,
         isFetching: false,
-        isError: false,
-        data: session.data,
-        error: undefined,
+        data: null,
+        error: null,
       };
     case "error":
-      return {
-        status:
-          !prevSession || prevSession.isPending
-            ? "unauthorized"
-            : prevSession.status,
-        isPending: false,
-        isFetching: false,
-        isError: true,
-        data:
-          !prevSession?.data || prevSession.isPending ? null : prevSession.data,
-        error: "server",
-      } as DecodedServerResponseSessionState;
+      return deriveErrorState(prevState, "server");
     case "disabled":
       return {
         status: "unavailable",
-        isPending: false,
         isFetching: false,
-        isError: true,
-        data: session.data,
         error: "bungie-api-offline",
+        data: prevState?.data ?? null,
       };
   }
 }
 
-function isNetworkError(err: Error): err is TypeError {
-  return err instanceof TypeError && !navigator.onLine;
+function deriveLoadingState(
+  previousState: BungieSessionState
+): BungieSessionState {
+  return {
+    ...previousState,
+    isFetching: true,
+  };
+}
+
+function deriveErrorState(
+  previousState: BungieSessionState | null,
+  error: "client" | "server"
+): BungieSessionState {
+  if (
+    !previousState ||
+    previousState.status === "pending" ||
+    previousState.status === "unavailable" ||
+    previousState.status === "unauthorized"
+  ) {
+    return {
+      status: "unauthorized",
+      isFetching: false,
+      data: null,
+      error,
+    };
+  }
+
+  if (previousState.status === "authorized") {
+    return {
+      status: "unauthorized",
+      isFetching: false,
+      data: null,
+      error,
+    };
+  }
+
+  return {
+    ...previousState,
+    error,
+    isFetching: false,
+  };
 }

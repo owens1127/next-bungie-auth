@@ -34,11 +34,6 @@ export const createNextBungieAuth = (
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (!config.generateState) {
-    throw new TypeError("generateState is a required config option");
-  }
-
   const defaultedConfig: NextBungieAuthConfig = {
     ...DefaultBungieAuthConfig,
     ...config,
@@ -65,7 +60,7 @@ export const createNextBungieAuth = (
           defaultedConfig
         );
       },
-      updateServerSession: (
+      updateServerSession: async (
         tokens: BungieTokenResponse,
         issuedAt: Date,
         cookies
@@ -75,7 +70,7 @@ export const createNextBungieAuth = (
         const accessAge = tokens.expires_in * 1000 - offset;
         const accessExpires = new Date(Date.now() + accessAge);
 
-        setAllCookies(
+        await setAllCookies(
           {
             tokens,
             sessionAge,
@@ -86,33 +81,36 @@ export const createNextBungieAuth = (
           defaultedConfig
         );
       },
-      getServerSession: (cookies) => {
+      getServerSession: async (cookies) => {
         const { bungieMembershipId, refreshToken, accessExpires, accessToken } =
-          getAllCookies(cookies, defaultedConfig);
+          await getAllCookies(cookies, defaultedConfig);
 
         if (!bungieMembershipId || !refreshToken) {
           return {
             status: "unauthorized",
             data: null,
+            message: "No session found",
           };
         }
 
         if (!accessToken || accessExpires.getTime() < Date.now()) {
           return {
             status: "stale",
-            data: {
-              bungieMembershipId: bungieMembershipId,
-            },
+            data: await defaultedConfig.createStaleSession({
+              bungieMembershipId,
+            }),
+            message: "Session expired",
           };
         }
 
         return {
           status: "authorized",
-          data: {
+          data: await defaultedConfig.createSession({
             bungieMembershipId: bungieMembershipId,
             accessToken: accessToken,
-            accessTokenExpiresAt: accessExpires.toISOString(),
-          },
+            accessTokenExpiresIn: accessExpires.getTime() - Date.now(),
+          }),
+          message: "Session refreshed",
         };
       },
       getRefreshedServerSession: async (cookies) => {

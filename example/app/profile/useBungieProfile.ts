@@ -3,7 +3,7 @@ import { useAuthorizedBungieSession } from "next-bungie-auth/client";
 import { useGetMembershipDataForCurrentUser } from "./useGetMembershipDataForCurrentUser";
 
 export const useBungieProfile = () => {
-  const session = useAuthorizedBungieSession();
+  const { session } = useAuthorizedBungieSession();
   const getMembershipData = useGetMembershipDataForCurrentUser(
     session.data.accessToken
   );

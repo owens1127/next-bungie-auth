@@ -8,13 +8,13 @@ export const DefaultBungieAuthConfig: Omit<
   NextBungieAuthConfig,
   NextBungieAuthConfigRequiredKeys
 > = {
-  sessionRefreshGracePeriod: 300,
   baseCookieName: "__next-bungie-auth",
   cookieOptions: {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
   },
+  encodeTokens: false,
   tokenHttp: (params) =>
     fetch("https://www.bungie.net/platform/app/oauth/token/", {
       method: "POST",
@@ -24,23 +24,29 @@ export const DefaultBungieAuthConfig: Omit<
       },
       body: new URLSearchParams({
         grant_type: params.grantType,
-        [params.grantKey]: params.value,
+        [params.grantKey]: params.grantValue,
       }),
     }),
-  generateCallbackUrlCookie: (request) => {
+  createSession: (params) => params,
+  createStaleSession: (params) => params,
+  generateCallbackUrlCookie: (authorizationRequest) => {
     return (
-      request.nextUrl.searchParams.get("callback_url") ??
-      request.headers.get("referer") ??
+      authorizationRequest.nextUrl.searchParams.get("callback_url") ??
+      authorizationRequest.headers.get("referrer") ??
       null
     );
   },
-  generateCallbackUrl: (request, callbackUrlCookie) => {
-    return callbackUrlCookie ?? new URL("/", request.url).toString();
-  },
-  generateErrorCallbackUrl: (request, errorType, callbackUrlCookie) => {
+  generateCallbackUrl: (callbackRequest, callbackUrlCookie, _) => {
     const url = callbackUrlCookie
       ? new URL(callbackUrlCookie)
-      : new URL("/", request.url);
+      : new URL("/", callbackRequest.url);
+    url.searchParams.delete("error");
+    return url.toString();
+  },
+  generateErrorCallbackUrl: (callbackRequest, callbackUrlCookie, errorType) => {
+    const url = callbackUrlCookie
+      ? new URL(callbackUrlCookie)
+      : new URL("/", callbackRequest.url);
     url.searchParams.set("error", errorType);
     return url.toString();
   },

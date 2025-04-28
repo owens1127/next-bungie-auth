@@ -11,12 +11,12 @@ import {
 } from "@/components/ui/card";
 
 export default function Page() {
-  const session = useBungieSession();
+  const { session, terminate, refresh } = useBungieSession();
 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Session</CardTitle>
+        <CardTitle>Session for {session.data?.username}</CardTitle>
       </CardHeader>
       <CardContent>
         <pre className="bg-gray-100 p-4 rounded-md overflow-x-auto">
@@ -27,10 +27,10 @@ export default function Page() {
         {(session.status === "authorized" ||
           session.status === "unavailable") && (
           <>
-            <Button onClick={() => session.kill()} variant="destructive">
+            <Button onClick={() => terminate()} variant="destructive">
               Sign Out
             </Button>
-            <Button onClick={() => session.refresh()} variant="secondary">
+            <Button onClick={() => refresh()} variant="secondary">
               Refresh
             </Button>
           </>

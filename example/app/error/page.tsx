@@ -3,15 +3,15 @@
 import { useBungieSession } from "next-bungie-auth/client";
 
 export default function Page() {
-  const session = useBungieSession();
+  const { session, terminate, refresh } = useBungieSession();
 
-  if (session.isPending) return <div>Loading...</div>;
+  if (session.status === "pending") return <div>Loading...</div>;
 
   return (
     <div>
       {session.status === "authorized" ? (
         <div>
-          <button onClick={() => session.kill()}>Sign Out</button>
+          <button onClick={() => terminate()}>Sign Out</button>
         </div>
       ) : (
         <div>
@@ -32,7 +32,7 @@ export default function Page() {
       </div>
       <pre>{JSON.stringify(session, null, 2)}</pre>
       <div>
-        <button onClick={() => session.refresh()}>Refresh</button>
+        <button onClick={() => refresh()}>Refresh</button>
       </div>
     </div>
   );

@@ -21,7 +21,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const cookieJar = await cookies();
-  const session = getServerSession(cookieJar);
+  const session = await getServerSession(cookieJar);
 
   return (
     <html lang="en" className={`${inter.variable} font-sans`}>

@@ -17,7 +17,7 @@ import {
   setCallbackCookie,
   setStateCookie,
 } from "./cookies";
-import { getSession, refreshSession } from "./session";
+import { refreshSession } from "./session";
 import { getTokens } from "./tokens";
 import { BungieAuthorizationError } from "./error";
 
@@ -36,16 +36,31 @@ export const createHandlers = (
 ): Pick<NextBungieAuth, "catchAllHandler" | "handlers"> => {
   const handlers: NextBungieAuth["handlers"] = {
     authorizeGET: async (request) => {
-      const state = defaultedConfig.generateState(request);
-
       const cookieJar = await cookies();
 
-      setStateCookie(state, cookieJar, defaultedConfig);
+      const [state, _] = await Promise.all([
+        (async () => {
+          if (defaultedConfig.generateState) {
+            const state = await defaultedConfig.generateState(request);
 
-      const callbackValue = defaultedConfig.generateCallbackUrlCookie(request);
-      if (callbackValue) {
-        setCallbackCookie(callbackValue, cookieJar, defaultedConfig);
-      }
+            setStateCookie(state, cookieJar, defaultedConfig);
+
+            return state;
+          } else {
+            return false;
+          }
+        })(),
+        (async () => {
+          const callbackValue =
+            await defaultedConfig.generateCallbackUrlCookie(request);
+
+          if (callbackValue) {
+            setCallbackCookie(callbackValue, cookieJar, defaultedConfig);
+          }
+
+          return callbackValue;
+        })(),
+      ]);
 
       const url = new URL("https://www.bungie.net/en/oauth/authorize");
       request.nextUrl.searchParams.forEach((value, key) => {
@@ -55,9 +70,11 @@ export const createHandlers = (
       });
       url.searchParams.set("client_id", defaultedConfig.clientId);
       url.searchParams.set("response_type", "code");
-      url.searchParams.set("state", state);
+      if (state !== false) {
+        url.searchParams.set("state", state);
+      }
 
-      defaultedConfig.logRequest("authorize", "info", "redirected");
+      defaultedConfig.logRequest?.("authorize", "info", "redirected");
       redirect(url.toString());
     },
 
@@ -65,11 +82,12 @@ export const createHandlers = (
       const cookieJar = await cookies();
       clearAllCookies(cookieJar, defaultedConfig);
 
-      defaultedConfig.logRequest("deauthorize", "success", "cookies cleared");
+      defaultedConfig.logRequest?.("deauthorize", "success", "cookies cleared");
       return buildNextResponse(
         {
           status: "unauthorized",
           data: null,
+          message: "Session cleared",
         },
         200
       );
@@ -78,7 +96,7 @@ export const createHandlers = (
     callbackGET: async (request) => {
       const searchParams = new URL(request.url).searchParams;
       const code = searchParams.get("code") ?? "";
-      const urlState = searchParams.get("state") ?? "";
+      const urlState = searchParams.get("state");
 
       const cookieJar = await cookies();
 
@@ -89,17 +107,17 @@ export const createHandlers = (
       clearStateCookie(cookieJar, defaultedConfig);
       clearCallbackCookie(cookieJar, defaultedConfig);
 
-      if (urlState !== cookieState) {
-        defaultedConfig.logRequest(
+      if (defaultedConfig.generateState && urlState !== cookieState) {
+        defaultedConfig.logRequest?.(
           "callback",
           "warn",
           `State mismatch error. Expected ${urlState}, got ${cookieState}`
         );
 
-        const errCallbackUrl = defaultedConfig.generateErrorCallbackUrl(
+        const errCallbackUrl = await defaultedConfig.generateErrorCallbackUrl(
           request,
-          "state_mismatch",
-          callbackUrlCookie
+          callbackUrlCookie,
+          "state_mismatch"
         );
         redirect(errCallbackUrl);
       }
@@ -115,21 +133,21 @@ export const createHandlers = (
         );
       } catch (e) {
         if (e instanceof BungieAuthorizationError) {
-          defaultedConfig.logRequest(
+          defaultedConfig.logRequest?.(
             "callback",
             "error",
             `${e.error}: ${e.error_description}`
           );
         } else if (e instanceof Error) {
-          defaultedConfig.logRequest("callback", "error", e.message);
+          defaultedConfig.logRequest?.("callback", "error", e.message);
         } else {
-          defaultedConfig.logRequest("callback", "error", "unknown error");
+          defaultedConfig.logRequest?.("callback", "error", "unknown error");
         }
 
-        const errCallbackUrl = defaultedConfig.generateErrorCallbackUrl(
+        const errCallbackUrl = await defaultedConfig.generateErrorCallbackUrl(
           request,
-          "token_error",
-          callbackUrlCookie
+          callbackUrlCookie,
+          "token_error"
         );
         redirect(errCallbackUrl);
       }
@@ -138,7 +156,7 @@ export const createHandlers = (
       const accessAge = tokens.expires_in * 1000;
       const accessExpires = new Date(Date.now() + accessAge);
 
-      setAllCookies(
+      await setAllCookies(
         {
           tokens,
           accessExpires,
@@ -149,35 +167,27 @@ export const createHandlers = (
         defaultedConfig
       );
 
-      defaultedConfig.logRequest("callback", "success", "authorized");
-
-      const callbackUrl = defaultedConfig.generateCallbackUrl(
+      const callbackUrl = await defaultedConfig.generateCallbackUrl(
         request,
-        callbackUrlCookie
+        callbackUrlCookie,
+        tokens
       );
+
+      defaultedConfig.logRequest?.("callback", "success", "authorized");
+      defaultedConfig.onAuthorize?.(tokens.membership_id);
+
       redirect(callbackUrl);
     },
 
     sessionGET: async () => {
       const cookieJar = await cookies();
-      const { session, message } = getSession(cookieJar, defaultedConfig);
-
-      defaultedConfig.logRequest("session", "info", message);
-      return buildNextResponse(session, 200);
-    },
-
-    refreshPOST: async () => {
-      const cookieJar = await cookies();
-      const { session, message } = await refreshSession(
-        cookieJar,
-        defaultedConfig
-      );
+      const session = await refreshSession(cookieJar, defaultedConfig);
 
       const getResonse = (statusCode: number) => {
-        defaultedConfig.logRequest(
-          "refresh",
+        defaultedConfig.logRequest?.(
+          "session",
           statusCode === 200 ? "success" : "error",
-          message
+          session.message
         );
         return buildNextResponse(session, statusCode);
       };
@@ -185,12 +195,14 @@ export const createHandlers = (
       switch (session.status) {
         case "authorized":
           return getResonse(200);
+        case "unauthorized":
+        case "expired":
+          return getResonse(401);
         case "error":
+        case "stale":
           return getResonse(500);
         case "disabled":
           return getResonse(503);
-        default:
-          return getResonse(401);
       }
     },
   };
@@ -222,8 +234,6 @@ export const createHandlers = (
       switch (path) {
         case "deauthorize":
           return handlers.deauthorizePOST(request);
-        case "refresh":
-          return handlers.refreshPOST(request);
         default:
           return Promise.resolve(
             new NextResponse("Not Found", {
