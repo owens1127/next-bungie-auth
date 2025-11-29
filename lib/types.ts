@@ -182,6 +182,18 @@ export interface NextBungieAuthConfig {
     callbackUrlCookie: string | null
   ) => string;
   /**
+   * Callback which is called when the user attempts to authorize.
+   */
+  onAuthorize?: () => void;
+  /**
+   * Callback which is called when the user signs in.
+   */
+  onSignIn?: (bungieMembershipId: string) => void;
+  /**
+   * Callback which is called when the user signs out.
+   */
+  onSignOut?: (bungieMembershipId: string) => void;
+  /**
    * Callback which takes in the result of the request and logs it.
    */
   logRequest: (

@@ -11,6 +11,7 @@ import {
   clearAllCookies,
   clearCallbackCookie,
   clearStateCookie,
+  getAllCookies,
   getCallbackCookie,
   getStateCookie,
   setAllCookies,
@@ -57,13 +58,23 @@ export const createHandlers = (
       url.searchParams.set("response_type", "code");
       url.searchParams.set("state", state);
 
+      defaultedConfig.onAuthorize?.();
+
       defaultedConfig.logRequest("authorize", "info", "redirected");
       redirect(url.toString());
     },
 
     deauthorizePOST: async () => {
       const cookieJar = await cookies();
+
+      // Get bungieMembershipId before clearing cookies for onSignOut callback
+      const { bungieMembershipId } = getAllCookies(cookieJar, defaultedConfig);
+
       clearAllCookies(cookieJar, defaultedConfig);
+
+      if (bungieMembershipId) {
+        defaultedConfig.onSignOut?.(bungieMembershipId);
+      }
 
       defaultedConfig.logRequest("deauthorize", "success", "cookies cleared");
       return buildNextResponse(
@@ -148,6 +159,9 @@ export const createHandlers = (
         cookieJar,
         defaultedConfig
       );
+
+      // Call onSignIn and onAuthorize callbacks after successful authorization
+      defaultedConfig.onSignIn?.(tokens.membership_id);
 
       defaultedConfig.logRequest("callback", "success", "authorized");
 

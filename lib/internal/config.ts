@@ -30,7 +30,7 @@ export const DefaultBungieAuthConfig: Omit<
   generateCallbackUrlCookie: (request) => {
     return (
       request.nextUrl.searchParams.get("callback_url") ??
-      request.headers.get("referer") ??
+      request.headers.get("referrer") ??
       null
     );
   },
